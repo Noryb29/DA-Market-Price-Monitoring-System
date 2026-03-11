@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { VegetableRouter } from './routes/VegetableRoutes.js';
+import { initializeDb } from './db.js';
 
 const app = express();
 app.use(express.json())
@@ -12,7 +13,20 @@ app.get('/',(req,res) =>{
 
 app.use('/api/vegetables/',VegetableRouter)
 
-app.listen(5000,()=>{
-    console.log("Server is running at http://localhost:5000")
-})
+const run = async () => {
+    try {
+        await initializeDb(); 
+        console.log("Database initialized...");
+
+        app.listen(5000, () => {
+            console.log("Server is running at http://localhost:5000");
+        });
+    } catch (error) {
+        console.error("Failed to start server:", error);
+        process.exit(1); 
+    }
+};
+
+run();
+
 
