@@ -4,13 +4,16 @@ export const db = mysql.createPool({
   host: "localhost",
   user: "root",
   password: "",
-  database: "marketprice",
   waitForConnections: true,
   connectionLimit: 10
 })
 
 export const initializeDb = async () => {
   try {
+
+    await db.query(`CREATE DATABASE IF NOT EXISTS marketprice`)
+
+    await db.query(`USE marketprice`)
 
     // MARKETS
     await db.query(`
