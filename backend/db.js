@@ -3,6 +3,7 @@ import mysql from "mysql2/promise"
 export const db = mysql.createPool({
   host: "localhost",
   user: "root",
+  database:"marketprice",
   password: "",
   waitForConnections: true,
   connectionLimit: 10
@@ -10,10 +11,6 @@ export const db = mysql.createPool({
 
 export const initializeDb = async () => {
   try {
-
-    await db.query(`CREATE DATABASE IF NOT EXISTS marketprice`)
-
-    await db.query(`USE marketprice`)
 
     // MARKETS
     await db.query(`

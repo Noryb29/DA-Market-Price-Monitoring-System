@@ -12,22 +12,21 @@ export const getVegetables = async (req, res) => {
     }
 
     const query = `
-      SELECT 
-        c.id AS commodity_id,
-        c.name,
-        c.specification,
-        cat.name AS category,
-        price_date,
-        m.name AS market_name,
-        pr.prevailing_price,
-        pr.high_price,
-        pr.low_price
-      FROM commodities c
-      JOIN categories cat ON c.category_id = cat.id
-      JOIN price_records pr ON pr.commodity_id = c.id
-      JOIN markets m ON pr.market_id = m.id
-      WHERE cat.name IN ('Lowland Vegetables', 'Highland Vegetables','Imported Commercial Rice','Local Commercial Rice','Fish','Livestock & Poultry','Spices','Fruits','Basic Commodities','Corn','Rootcrops')
-      ORDER BY c.name;
+     SELECT 
+    c.id AS commodity_id,
+    c.name,
+    c.specification,
+    cat.name AS category,
+    pr.price_date,
+    m.name AS market_name,
+    pr.prevailing_price,
+    pr.high_price,
+    pr.low_price
+FROM commodities c
+JOIN categories cat ON c.category_id = cat.id
+LEFT JOIN price_records pr ON pr.commodity_id = c.id
+LEFT JOIN markets m ON pr.market_id = m.id
+ORDER BY c.name;
     `
 
     const [rows] = await db.query(query)
