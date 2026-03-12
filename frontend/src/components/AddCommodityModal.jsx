@@ -47,7 +47,7 @@ const AddCommodityModal = ({ isOpen, OnClose }) => {
 
         <span className="flex gap-30 justify-around flex-row-reverse">
         <IoCloseCircle onClick={OnClose} size={30} color="white" className="mb-5"/>
-        <h2 className="text-xl text-white font-bold mb-4">
+        <h2 className="text-xl text-black font-bold mb-4">
             Add Commodity
         </h2>
         </span>
