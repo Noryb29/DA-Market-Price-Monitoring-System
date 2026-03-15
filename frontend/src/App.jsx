@@ -18,6 +18,7 @@ const App = () => {
   // ── Sidebar filter state (passed down to CommodityTable) ──────────────────
   const [categoryFilter, setCategoryFilter] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
+  const [dateFilter, setDateFilter] = useState("")
 
   useEffect(() => {
     fetchVegetables()
@@ -28,7 +29,7 @@ const App = () => {
     ...new Set(vegetables.map((v) => v.categories?.trim()).filter(Boolean)),
   ]
 
-  const hasFilters = categoryFilter || searchTerm
+const hasFilters = categoryFilter || searchTerm || dateFilter
 
   return (
     <div className="min-h-screen flex bg-linear-to-b from-green-50 to-white">
@@ -130,12 +131,24 @@ const App = () => {
               </select>
             </div>
 
+            {/* Date Filter */}
+            <div>
+              <label className="text-sm font-semibold mb-1 block">Date</label>
+              <input
+                type="date"
+                className="input input-bordered w-full"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+              />
+            </div>
+
             {/* Clear Filters */}
             {hasFilters && (
               <button
                 onClick={() => {
                   setCategoryFilter("")
                   setSearchTerm("")
+                  setDateFilter("")
                 }}
                 className="btn btn-error btn-sm w-full"
               >
@@ -165,6 +178,7 @@ const App = () => {
         <CommodityTable
           search={searchTerm}
           categoryFilter={categoryFilter}
+          dateFilter={dateFilter}
           onAddPriceRecord={(veg) => {
             setSelectedVegetable(veg)
             setIsAddOpen(true)

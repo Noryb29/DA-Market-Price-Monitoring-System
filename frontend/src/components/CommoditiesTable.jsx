@@ -15,7 +15,7 @@ const fmtDate = (dateStr) => {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) => {
+const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "",  dateFilter = ""  }) => {
   const {
     vegetables,
     categories,
@@ -51,14 +51,21 @@ const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) 
 
   // ── Filter by search + category ───────────────────────────────────────────
   const filtered = vegetables.filter((v) => {
-    const matchSearch = search
-      ? v.name?.toLowerCase().includes(search.toLowerCase())
-      : true
-    const matchCat = categoryFilter
-      ? v.categories?.toLowerCase() === categoryFilter.toLowerCase()
-      : true
-    return matchSearch && matchCat
-  })
+
+  const matchSearch = search
+    ? v.name?.toLowerCase().includes(search.toLowerCase())
+    : true
+
+  const matchCat = categoryFilter
+    ? v.categories?.toLowerCase() === categoryFilter.toLowerCase()
+    : true
+
+  const matchDate = dateFilter
+    ? v.price_date?.split("T")[0] === dateFilter
+    : true
+
+  return matchSearch && matchCat && matchDate
+})
 
   // ── Group by category ─────────────────────────────────────────────────────
   const grouped = filtered.reduce((acc, v) => {
