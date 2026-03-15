@@ -317,3 +317,178 @@ export const addCommodity = async (req, res) => {
     })
   }
 }
+
+export const importFormRecords = async (req, res) => {
+  const { meta = {}, form, data } = req.body
+ 
+  // ── Basic validation ────────────────────────────────────────────────────
+  if (!Array.isArray(data) || data.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "No records provided in request body."
+    })
+  }
+ 
+  if (!["A1", "B1"].includes(form)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid form type. Expected "A1" or "B1".'
+    })
+  }
+ 
+  // Pull shared metadata that applies to every row
+  const market        = meta.market        || null
+  const monitoringDate = meta.date
+    ? parseDateString(meta.date)   // normalise "May 19, 2025" → "2025-05-19"
+    : null
+  const monitoredBy   = meta.monitoredBy   || null
+  const officeRegion  = meta.office        || null
+ 
+  const conn = await db.getConnection()
+ 
+  try {
+    await conn.beginTransaction()
+ 
+    // ── Build rows ──────────────────────────────────────────────────────
+    const rows = data.map((r) => buildRow(r, form, market, monitoringDate, monitoredBy, officeRegion))
+ 
+    // ── Bulk INSERT ─────────────────────────────────────────────────────
+    // Using INSERT IGNORE so re-importing the same file won't duplicate
+    // rows if you add a unique index on
+    // (commodity, market, monitoring_date) later.
+    // Change to a plain INSERT if you prefer strict duplicate rejection.
+    const insertQuery = `
+      INSERT INTO price_monitoring (
+        commodity,
+        commodity_category,
+        specification,
+        unit,
+        respondent_1,
+        respondent_2,
+        respondent_3,
+        respondent_4,
+        respondent_5,
+        high_range,
+        low_range,
+        no_mode,
+        prevailing_price,
+        supply_level,
+        remarks,
+        market,
+        monitoring_date,
+        monitored_by,
+        office_region
+      ) VALUES ?
+    `
+ 
+    const values = rows.map((r) => [
+      r.commodity,
+      r.commodity_category,
+      r.specification,
+      r.unit,
+      r.respondent_1,
+      r.respondent_2,
+      r.respondent_3,
+      r.respondent_4,
+      r.respondent_5,
+      r.high_range,
+      r.low_range,
+      r.no_mode,
+      r.prevailing_price,
+      r.supply_level,
+      r.remarks,
+      r.market,
+      r.monitoring_date,
+      r.monitored_by,
+      r.office_region
+    ])
+ 
+    const [result] = await conn.query(insertQuery, [values])
+ 
+    await conn.commit()
+ 
+    return res.status(201).json({
+      success: true,
+      message: `Successfully imported ${result.affectedRows} record(s) from Form ${form}.`,
+      affectedRows: result.affectedRows
+    })
+ 
+  } catch (error) {
+    await conn.rollback()
+    console.error("Import Controller Error:", error)
+ 
+    return res.status(500).json({
+      success: false,
+      message: "Import failed. All changes have been rolled back.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
+    })
+ 
+  } finally {
+    conn.release()
+  }
+}
+ 
+// ── Helpers ───────────────────────────────────────────────────────────────
+ 
+/**
+ * Maps a single parsed record to a flat DB row.
+ * Form B1 records don't have respondent columns — those stay NULL.
+ */
+function buildRow(r, form, market, monitoringDate, monitoredBy, officeRegion) {
+  const isA1 = form === "A1"
+ 
+  return {
+    commodity:          r.commodity          ?? null,
+    commodity_category: r.commodity_category ?? null,
+    specification:      r.specification      || null,
+    unit:               r.unit               || null,
+ 
+    // A1 only
+    respondent_1: isA1 ? (r.respondent_1 ?? null) : null,
+    respondent_2: isA1 ? (r.respondent_2 ?? null) : null,
+    respondent_3: isA1 ? (r.respondent_3 ?? null) : null,
+    respondent_4: isA1 ? (r.respondent_4 ?? null) : null,
+    respondent_5: isA1 ? (r.respondent_5 ?? null) : null,
+    no_mode:      isA1 ? (r.no_mode       ?? null) : null,
+ 
+    high_range:      r.high_range      ?? (isA1 ? null : r.high_range)  ?? null,
+    low_range:       r.low_range       ?? null,
+    prevailing_price: isA1
+      ? (r.prevailing_price    ?? null)
+      : (r.prevailing_today    ?? null),
+ 
+    supply_level: ["A", "S", "D"].includes(r.supply_level) ? r.supply_level : "NONE",
+    remarks:      r.remarks || null,
+ 
+    // From meta — same for every row in this import batch
+    market,
+    monitoring_date: monitoringDate,
+    monitored_by:    monitoredBy,
+    office_region:   officeRegion
+  }
+}
+ 
+/**
+ * Converts common date string formats from the Excel sheet into
+ * a MySQL-compatible "YYYY-MM-DD" string.
+ *
+ * Handles:
+ *   "May 19, 2025"     → "2025-05-19"
+ *   "05/19/2025"       → "2025-05-19"
+ *   "2025-05-19"       → "2025-05-19"  (pass-through)
+ */
+function parseDateString(raw) {
+  if (!raw) return null
+ 
+  const trimmed = String(raw).trim()
+ 
+  // Already ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+ 
+  const d = new Date(trimmed)
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split("T")[0]
+  }
+ 
+  return null
+}

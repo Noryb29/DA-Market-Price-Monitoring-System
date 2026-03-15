@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react"
-import VegetableCard from "./components/VegetableCard"
 import VegetableModal from "./components/VegetableModal"
 import { useVegetableStore } from "./store/VegetableStore"
-import AddPriceRecordModal from "./components/AddPriceRecordModal"
-import AddCommodityModal from "./components/AddCommodityModal"
+import UploadExcelModal from "./components/UploadExcelModal"
 
 const App = () => {
   const { vegetables, fetchVegetables, isLoading, error } = useVegetableStore()
@@ -12,6 +10,7 @@ const App = () => {
   const [selectedVegetable, setSelectedVegetable] = useState(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isAddCommodityOpen,setIsAddCommodityOpen] = useState(false)
+  const [isUploadExcelOpen,setIsUploadExcelOpen] = useState(false)
 
   const [categoryFilter, setCategoryFilter] = useState("")
   const [dateFilter, setDateFilter] = useState("")
@@ -54,15 +53,9 @@ const App = () => {
   return (
     <div className="min-h-screen flex bg-linear-to-b from-green-50 to-white">
 
-      <AddPriceRecordModal
-        isOpen={isAddOpen}
-        OnClose={() => setIsAddOpen(false)}
-      />
-
-
-      <AddCommodityModal
-      isOpen={isAddCommodityOpen}
-      OnClose={() => setIsAddCommodityOpen(false)}
+      <UploadExcelModal
+      isOpen={isUploadExcelOpen}
+      OnClose={() => setIsUploadExcelOpen(false)}
       />
 
       {/* LEFT SIDEBAR */}
@@ -90,6 +83,19 @@ const App = () => {
       className="btn btn-success w-full"
     >
       Add New Commodity
+    </button>
+
+    <button
+      onClick={() => setIsUploadExcelOpen(true)}
+      className="btn btn-success w-full"
+    >
+      Bulk Upload Excel File
+    </button>
+
+     <button
+      className="btn btn-success w-full"
+    >
+      Bulk Upload PDF File
     </button>
 
   </div>
@@ -209,13 +215,6 @@ const App = () => {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredVegetables.map((veg) => (
-            <VegetableCard
-              key={veg.id}
-              {...veg}
-              onClick={() => openModal(veg)}
-            />
-          ))}
         </div>
 
       </div>
