@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import axios from "axios"
 import Swal from "sweetalert2"
+import { extractPDF as parsePDF } from "../utils/extractPDF"
 
 const BASE_URL = "http://localhost:5000"
 
@@ -50,7 +51,7 @@ export const useVegetableStore = create((set, get) => ({
 
     } catch (error) {
       set({
-        error: error.response?.data?.message || "Failed to fetch vegetables",
+        error: error.response?.data?.message,
         isLoading: false
       })
     }
@@ -59,63 +60,14 @@ export const useVegetableStore = create((set, get) => ({
   // =====================
   // FETCH MARKETS
   // =====================
-    fetchMarkets: async () => {
-      try {
-        const response = await axios.get(`${BASE_URL}/api/vegetables/markets`)
-        set({ markets: response.data.data })
-      } catch {
-        set({ error: "Failed to fetch markets" })
-      }
-    },
-
-    addCommodity: async (formData) => {
-
-  if (!formData.category_id || !formData.name) {
-    Swal.fire({
-      icon: "warning",
-      title: "Missing Fields",
-      text: "Category and Commodity Name are required."
-    })
-
-    return { success: false }
-  }
-
-  try {
-
-    const response = await axios.post(
-      `${BASE_URL}/api/vegetables/commodities`,
-      formData
-    )
-
-    if (response.data.success) {
-
-      Swal.fire({
-        icon: "success",
-        title: "Commodity Added",
-        text: "New commodity successfully added.",
-        timer: 1500,
-        showConfirmButton: false
-      })
-
-      get().fetchCommodities()
-
-      return response.data
+  fetchMarkets: async () => {
+    try {
+      const response = await axios.get(`${BASE_URL}/api/vegetables/markets`)
+      set({ markets: response.data.data })
+    } catch {
+      set({ error: "Failed to fetch markets" })
     }
-
-  } catch (error) {
-
-    Swal.fire({
-      icon: "error",
-      title: "Error",
-      text: "Failed to add commodity."
-    })
-
-    return {
-      success: false,
-      message: "Failed to add commodity"
-    }
-  }
-},
+  },
 
   // =====================
   // FETCH CATEGORIES
@@ -149,11 +101,8 @@ export const useVegetableStore = create((set, get) => ({
       const response = await axios.get(
         `${BASE_URL}/api/vegetables/commodity/${commodityId}/prices`
       )
-
       set({ commodityPrices: response.data.data })
-
       return response.data.data
-
     } catch (error) {
       console.error("Failed to fetch commodity prices")
       return []
@@ -161,52 +110,201 @@ export const useVegetableStore = create((set, get) => ({
   },
 
   // =====================
-  // ADD PRICE RECORD
+  // ADD COMMODITY
+  // silent = true skips Swal alerts (used during bulk Excel import)
   // =====================
-  addPriceRecord: async (formData) => {
-
-  if (!formData.commodity_id || !formData.market_id || !formData.price_date || !formData.prevailing_price) {
-
-    Swal.fire({
-      icon: "warning",
-      title: "Missing Fields",
-      text: "Please fill all required fields."
-    })
-
-    return { success: false }
-  }
-
-  try {
-
-    const response = await axios.post(
-      `${BASE_URL}/api/vegetables/prices`,
-      formData
-    )
-
-    if (response.data.success) {
-
-      Swal.fire({
-        icon: "success",
-        title: "Price Added",
-        text: "Price record successfully saved.",
-        timer: 1500,
-        showConfirmButton: false
-      })
-
-      get().fetchVegetables()
-
-      return response.data
+  addCommodity: async (formData, silent = false) => {
+    if (!formData.category_id || !formData.name) {
+      if (!silent) {
+        Swal.fire({
+          icon: "warning",
+          title: "Missing Fields",
+          text: "Category and Commodity Name are required."
+        })
+      }
+      return { success: false }
     }
 
-  } catch (err) {
+    try {
+      const response = await axios.post(
+        `${BASE_URL}/api/vegetables/commodities`,
+        formData
+      )
 
-    Swal.fire({
-      icon: "error",
-      title: "Error",
-      text: "Failed to add price record."
-    })
+      if (response.data.success) {
+        if (!silent) {
+          Swal.fire({
+            icon: "success",
+            title: "Commodity Added",
+            text: "New commodity successfully added.",
+            timer: 1500,
+            showConfirmButton: false
+          })
+        }
+        get().fetchCommodities()
+        return response.data // { success: true, id: insertId }
+      }
 
-    return { success: false }
-  }
+    } catch (error) {
+      if (!silent) {
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to add commodity."
+        })
+      }
+      return { success: false, message: "Failed to add commodity" }
+    }
+  },
+
+  // =====================
+  // ADD CATEGORY
+  // =====================
+  addCategory: async (name) => {
+    try {
+      const response = await axios.post(
+        `${BASE_URL}/api/vegetables/categories`,
+        { name }
+      )
+      if (response.data.success) {
+        await get().fetchCategories()
+        return response.data // { success: true, id: number }
+      }
+      return { success: false }
+    } catch (error) {
+      console.error("Add Category Error:", error)
+      return { success: false }
+    }
+  },
+
+  // =====================
+  // ADD MARKET
+  // =====================
+  addMarket: async (name, city = "") => {
+    try {
+      const response = await axios.post(
+        `${BASE_URL}/api/vegetables/markets`,
+        { name, city }
+      )
+      if (response.data.success) {
+        await get().fetchMarkets()
+        return response.data // { success: true, id: number }
+      }
+      return { success: false }
+    } catch (error) {
+      console.error("Add Market Error:", error)
+      return { success: false }
+    }
+  },
+
+  // =====================
+  // ADD PRICE RECORD
+  // silent = true skips Swal alerts (used during bulk Excel import)
+  // =====================
+  addPriceRecord: async (formData, silent = false) => {
+    if (!formData.commodity_id || !formData.market_id || !formData.price_date || !formData.prevailing_price) {
+      if (!silent) {
+        Swal.fire({
+          icon: "warning",
+          title: "Missing Fields",
+          text: "Please fill all required fields."
+        })
+      }
+      return { success: false }
+    }
+
+    try {
+      const response = await axios.post(
+        `${BASE_URL}/api/vegetables/prices`,
+        formData
+      )
+
+      if (response.data.success) {
+        if (!silent) {
+          Swal.fire({
+            icon: "success",
+            title: "Price Added",
+            text: "Price record successfully saved.",
+            timer: 1500,
+            showConfirmButton: false
+          })
+        }
+        get().fetchVegetables()
+        return response.data
+      }
+
+    } catch (err) {
+      // 409 = duplicate record for that date
+      if (err.response?.status === 409) {
+        return { success: false, duplicate: true }
+      }
+      if (!silent) {
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "Failed to add price record."
+        })
+      }
+      return { success: false }
+    }
+  },
+
+  // =====================
+  // UPDATE COMMODITY
+  // =====================
+  updateCommodity: async (id, formData) => {
+    try {
+      const response = await axios.put(
+        `${BASE_URL}/api/vegetables/commodities/${id}`,
+        formData
+      )
+      if (response.data.success) {
+        Swal.fire({
+          icon: "success",
+          title: "Updated",
+          text: "Commodity updated successfully.",
+          timer: 1500,
+          showConfirmButton: false
+        })
+        get().fetchVegetables()
+        get().fetchCommodities()
+        return response.data
+      }
+      return { success: false }
+    } catch (error) {
+      Swal.fire({ icon: "error", title: "Error", text: "Failed to update commodity." })
+      return { success: false }
+    }
+  },
+
+  // =====================
+  // DELETE COMMODITY
+  // =====================
+  deleteCommodity: async (id) => {
+    try {
+      const response = await axios.delete(
+        `${BASE_URL}/api/vegetables/commodities/${id}`
+      )
+      if (response.data.success) {
+        Swal.fire({
+          icon: "success",
+          title: "Deleted",
+          text: "Commodity deleted successfully.",
+          timer: 1500,
+          showConfirmButton: false
+        })
+        get().fetchVegetables()
+        get().fetchCommodities()
+        return response.data
+      }
+      return { success: false }
+    } catch (error) {
+      Swal.fire({ icon: "error", title: "Error", text: "Failed to delete commodity." })
+      return { success: false }
+    }
+  },
+  extractPDF: async (file) => {
+  return await parsePDF(file)
 }
+
 }))

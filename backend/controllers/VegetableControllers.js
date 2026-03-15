@@ -33,8 +33,7 @@ ORDER BY c.name;
 
     if (!rows || rows.length === 0) {
       return res.status(404).json({
-        success: false,
-        message: "No vegetables found"
+        success: false
       })
     }
 
@@ -188,56 +187,6 @@ export const getCommodityPrices = async (req, res) => {
   }
 }
 
-// ADD PRICE RECORD
-export const addPriceRecord = async (req, res) => {
-  try {
-    const {
-      commodity_id,
-      market_id,
-      price_date,
-      prevailing_price,
-      high_price,
-      low_price
-    } = req.body
-
-    // Basic validation
-    if (!commodity_id || !market_id || !price_date || !prevailing_price) {
-      return res.status(400).json({
-        success: false,
-        message: "Required fields missing"
-      })
-    }
-
-    const query = `
-      INSERT INTO price_records
-        (commodity_id, market_id, price_date, prevailing_price, high_price, low_price)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `
-
-    const [result] = await db.query(query, [
-      commodity_id,
-      market_id,
-      price_date,
-      prevailing_price,
-      high_price || null,
-      low_price || null
-    ])
-
-    return res.status(201).json({
-      success: true,
-      message: "Price record added",
-      id: result.insertId
-    })
-
-  } catch (error) {
-    console.error("Add Price Error:", error)
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add price record"
-    })
-  }
-}
-
 // GET LATEST PRICES
 export const getLatestPrices = async (req, res) => {
   try {
@@ -315,5 +264,225 @@ export const addCommodity = async (req, res) => {
       success: false,
       message: "Failed to add commodity"
     })
+  }
+}
+
+// ─── REPLACE your existing addPriceRecord in the controller ──────────────────
+
+export const addPriceRecord = async (req, res) => {
+  try {
+    const {
+      commodity_id,
+      market_id,
+      price_date,
+      respondent_1,
+      respondent_2,
+      respondent_3,
+      respondent_4,
+      respondent_5,
+      prevailing_price,
+      high_price,
+      low_price
+    } = req.body
+ 
+    if (!commodity_id || !market_id || !price_date || !prevailing_price) {
+      return res.status(400).json({
+        success: false,
+        message: "Required fields missing"
+      })
+    }
+ 
+    // Only one price record allowed per commodity + market + date
+    const [existing] = await db.query(
+      "SELECT id FROM price_records WHERE commodity_id = ? AND market_id = ? AND price_date = ?",
+      [commodity_id, market_id, price_date]
+    )
+ 
+    if (existing.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "A price record for this commodity and market on " + price_date + " already exists"
+      })
+    }
+ 
+    const query = `
+      INSERT INTO price_records
+        (commodity_id, market_id, price_date,
+         respondent_1, respondent_2, respondent_3, respondent_4, respondent_5,
+         prevailing_price, high_price, low_price)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+ 
+    const [result] = await db.query(query, [
+      commodity_id,
+      market_id,
+      price_date,
+      respondent_1 ?? null,
+      respondent_2 ?? null,
+      respondent_3 ?? null,
+      respondent_4 ?? null,
+      respondent_5 ?? null,
+      prevailing_price,
+      high_price ?? null,
+      low_price ?? null
+    ])
+ 
+    return res.status(201).json({
+      success: true,
+      message: "Price record added",
+      id: result.insertId
+    })
+ 
+  } catch (error) {
+    console.error("Add Price Error:", error)
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add price record"
+    })
+  }
+}
+
+export const addCategory = async (req, res) => {
+  try {
+    const { name } = req.body
+ 
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Category name is required"
+      })
+    }
+ 
+    // Check if already exists (case-insensitive)
+    const [existing] = await db.query(
+      "SELECT id FROM categories WHERE LOWER(name) = LOWER(?)",
+      [name.trim()]
+    )
+ 
+    if (existing.length > 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Category already exists",
+        id: existing[0].id
+      })
+    }
+ 
+    const [result] = await db.query(
+      "INSERT INTO categories (name) VALUES (?)",
+      [name.trim()]
+    )
+ 
+    return res.status(201).json({
+      success: true,
+      message: "Category added successfully",
+      id: result.insertId
+    })
+ 
+  } catch (error) {
+    console.error("Add Category Error:", error)
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add category"
+    })
+  }
+}
+ 
+// ADD MARKET
+export const addMarket = async (req, res) => {
+  try {
+    const { name, city } = req.body
+ 
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Market name is required"
+      })
+    }
+ 
+    // Check if already exists (case-insensitive)
+    const [existing] = await db.query(
+      "SELECT id FROM markets WHERE LOWER(name) = LOWER(?)",
+      [name.trim()]
+    )
+ 
+    if (existing.length > 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Market already exists",
+        id: existing[0].id
+      })
+    }
+ 
+    const [result] = await db.query(
+      "INSERT INTO markets (name, city) VALUES (?, ?)",
+      [name.trim(), city?.trim() || ""]
+    )
+ 
+    return res.status(201).json({
+      success: true,
+      message: "Market added successfully",
+      id: result.insertId
+    })
+ 
+  } catch (error) {
+    console.error("Add Market Error:", error)
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add market"
+    })
+  }
+}
+
+// ─── ADD THESE TO YOUR EXISTING CONTROLLER ───────────────────────────────────
+
+// UPDATE COMMODITY
+export const updateCommodity = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { category_id, name, specification } = req.body
+
+    if (!category_id || !name) {
+      return res.status(400).json({
+        success: false,
+        message: "Category and name are required"
+      })
+    }
+
+    const [result] = await db.query(
+      `UPDATE commodities SET category_id = ?, name = ?, specification = ? WHERE id = ?`,
+      [category_id, name.trim(), specification?.trim() || null, id]
+    )
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: "Commodity not found" })
+    }
+
+    return res.status(200).json({ success: true, message: "Commodity updated successfully" })
+
+  } catch (error) {
+    console.error("Update Commodity Error:", error)
+    return res.status(500).json({ success: false, message: "Failed to update commodity" })
+  }
+}
+
+// DELETE COMMODITY
+export const deleteCommodity = async (req, res) => {
+  try {
+    const { id } = req.params
+
+    // Delete price records first (foreign key constraint)
+    await db.query("DELETE FROM price_records WHERE commodity_id = ?", [id])
+
+    const [result] = await db.query("DELETE FROM commodities WHERE id = ?", [id])
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: "Commodity not found" })
+    }
+
+    return res.status(200).json({ success: true, message: "Commodity deleted successfully" })
+
+  } catch (error) {
+    console.error("Delete Commodity Error:", error)
+    return res.status(500).json({ success: false, message: "Failed to delete commodity" })
   }
 }

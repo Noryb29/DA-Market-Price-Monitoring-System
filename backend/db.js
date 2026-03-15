@@ -50,6 +50,11 @@ export const initializeDb = async () => {
         prevailing_price DECIMAL(10,2),
         high_price DECIMAL(10,2),
         low_price DECIMAL(10,2),
+        respondent_1 FLOAT(10,2) NULL,
+        respondent_2 FLOAT(10,2) NULL,
+        respondent_3 FLOAT(10,2) NULL,
+        respondent_4 FLOAT(10,2) NULL,
+        respondent_5 FLOAT(10,2) NULL,
         FOREIGN KEY (commodity_id) REFERENCES commodities(id),
         FOREIGN KEY (market_id) REFERENCES markets(id)
       )
