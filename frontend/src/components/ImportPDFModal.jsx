@@ -59,8 +59,11 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
     markets.find((m) => m.name?.trim().toLowerCase() === name?.trim().toLowerCase()) ?? null
 
   // ── Annotate rows ─────────────────────────────────────────────────────────
-  const annotateRows = (parsed) =>
-    parsed.map((row, index) => {
+  const annotateRows = (parsed) => {
+    // Detect duplicates within the same file: commodity+market+date
+    const seenKeys = new Set()
+
+    return parsed.map((row, index) => {
       const category = findCategory(row.category)
       const categoryId = category?.id ?? null
       const commodity = findCommodity(row.commodity_name, categoryId)
@@ -71,9 +74,20 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
       if (!commodity) willCreate.push(`commodity "${row.commodity_name}"`)
       if (!market) willCreate.push(`market "${row.market_name}"`)
 
+      // Only flag truly blocking errors — blank prices are allowed
       const errors = []
       if (!row.price_date) errors.push("Missing price date")
-      if (row.prevailing_price === null) errors.push("No prevailing price")
+      if (!row.commodity_name?.trim()) errors.push("Blank commodity name")
+
+      // Within-file duplicate check
+      const dedupKey = `${row.commodity_name?.trim().toLowerCase()}::${row.market_name?.trim().toLowerCase()}::${row.price_date}`
+      if (dedupKey && errors.length === 0) {
+        if (seenKeys.has(dedupKey)) {
+          errors.push("Duplicate row in this file")
+        } else {
+          seenKeys.add(dedupKey)
+        }
+      }
 
       return {
         ...row,
@@ -85,6 +99,7 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
         _errors: errors,
       }
     })
+  }
 
   // ── Parse file ────────────────────────────────────────────────────────────
   const parseFile = async (file) => {
@@ -145,6 +160,8 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
     const categoryCache = {}
     const commodityCache = {}
     const marketCache = {}
+    // Runtime dedup: track commodity_id+market_id+price_date combos already inserted this session
+    const insertedKeys = new Set()
 
     let successCount = 0
     let failCount = 0
@@ -196,7 +213,14 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
           createdCount++
         }
 
-        // 4. Price record
+        // 4. Price record — prevailing/high/low may all be null, that's fine
+        // Skip if this commodity+market+date was already inserted this session
+        const insertKey = `${commodity_id}::${market_id}::${row.price_date}`
+        if (insertedKeys.has(insertKey)) {
+          duplicateCount++
+          continue
+        }
+
         const result = await addPriceRecord({
           commodity_id,
           market_id,
@@ -206,12 +230,12 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
           respondent_3: null,
           respondent_4: null,
           respondent_5: null,
-          prevailing_price: row.prevailing_price,
-          high_price: row.high_price,
-          low_price: row.low_price,
+          prevailing_price: row.prevailing_price ?? null,
+          high_price: row.high_price ?? null,
+          low_price: row.low_price ?? null,
         })
 
-        if (result?.success) successCount++
+        if (result?.success) { successCount++; insertedKeys.add(insertKey) }
         else if (result?.duplicate) duplicateCount++
         else failCount++
 
@@ -259,6 +283,10 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
   const validRows = rows.filter((r) => r._errors.length === 0)
   const errorRows = rows.filter((r) => r._errors.length > 0)
   const newEntryRows = validRows.filter((r) => r._willCreate.length > 0)
+  // Rows that are valid but have no price data at all
+  const noPriceRows = validRows.filter(
+    (r) => r.prevailing_price == null && r.high_price == null && r.low_price == null
+  )
 
   const groupedByCategory = rows.reduce((acc, row) => {
     const cat = row.category || "Uncategorized"
@@ -334,6 +362,7 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
                 <li>Date and market names auto-extracted from the report header</li>
                 <li>Two markets per report — both imported simultaneously</li>
                 <li>Prevailing, High, and Low prices read directly</li>
+                <li>Rows with blank prices are imported — commodity is still recorded</li>
                 <li>Missing categories, commodities, and markets are <strong>auto-created</strong></li>
               </ul>
             </div>
@@ -358,9 +387,21 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
               {newEntryRows.length > 0 && (
                 <span className="badge badge-warning">✦ {newEntryRows.length} will auto-create</span>
               )}
-              {errorRows.length > 0 && (
-                <span className="badge badge-error">✕ {errorRows.length} error{errorRows.length !== 1 ? "s" : ""}</span>
+              {noPriceRows.length > 0 && (
+                <span className="badge badge-info">— {noPriceRows.length} no price</span>
               )}
+              {(() => {
+                const dupRows = rows.filter(r => r._errors.some(e => e.includes("Duplicate")))
+                return dupRows.length > 0
+                  ? <span className="badge badge-ghost">⊘ {dupRows.length} duplicate{dupRows.length !== 1 ? "s" : ""}</span>
+                  : null
+              })()}
+              {(() => {
+                const hardErrors = rows.filter(r => r._errors.length > 0 && !r._errors.every(e => e.includes("Duplicate")))
+                return hardErrors.length > 0
+                  ? <span className="badge badge-error">✕ {hardErrors.length} error{hardErrors.length !== 1 ? "s" : ""}</span>
+                  : null
+              })()}
               <span className="text-xs text-gray-400 ml-auto">{fileName}</span>
               <button
                 className="btn btn-xs btn-ghost"
@@ -427,12 +468,20 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
                           <td>
                             {row._errors.length > 0 ? (
                               <div className="tooltip tooltip-left" data-tip={row._errors.join(" | ")}>
-                                <span className="badge badge-error badge-sm cursor-help">✕ error</span>
+                                <span className={`badge badge-sm cursor-help ${
+                                  row._errors.some(e => e.includes("Duplicate"))
+                                    ? "badge-ghost"
+                                    : "badge-error"
+                                }`}>
+                                  {row._errors.some(e => e.includes("Duplicate")) ? "⊘ dup" : "✕ error"}
+                                </span>
                               </div>
                             ) : row._willCreate.length > 0 ? (
                               <div className="tooltip tooltip-left" data-tip={`Will create: ${row._willCreate.join(", ")}`}>
                                 <span className="badge badge-warning badge-sm cursor-help">✦ auto-create</span>
                               </div>
+                            ) : row.prevailing_price == null && row.high_price == null && row.low_price == null ? (
+                              <span className="badge badge-info badge-sm">— no price</span>
                             ) : (
                               <span className="badge badge-success badge-sm">✓</span>
                             )}
