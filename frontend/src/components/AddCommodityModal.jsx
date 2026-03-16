@@ -28,6 +28,7 @@ const AddCommodityModal = ({ isOpen, OnClose }) => {
     setIsSubmitting(false)
     if (result?.success) {
       setForm({ category_id: "", name: "", specification: "" })
+      OnClose()
     }
   }
 
