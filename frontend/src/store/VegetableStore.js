@@ -41,7 +41,7 @@ export const useVegetableStore = create((set, get) => ({
           prevailing: item.prevailing_price,
           high: item.high_price,
           low: item.low_price,
-          respondent_1: item.respondent_1,  // ✅
+          respondent_1: item.respondent_1,
           respondent_2: item.respondent_2,
           respondent_3: item.respondent_3,
           respondent_4: item.respondent_4,
@@ -100,6 +100,7 @@ export const useVegetableStore = create((set, get) => ({
 
   // =====================
   // FETCH COMMODITY PRICE HISTORY
+  // Returns full rows including respondent_1..5
   // =====================
   fetchCommodityPrices: async (commodityId) => {
     try {
@@ -116,7 +117,7 @@ export const useVegetableStore = create((set, get) => ({
 
   // =====================
   // ADD COMMODITY
-  // silent = true skips Swal alerts (used during bulk Excel import)
+  // silent = true skips Swal alerts (used during bulk import)
   // =====================
   addCommodity: async (formData, silent = false) => {
     if (!formData.category_id || !formData.name) {
@@ -204,15 +205,17 @@ export const useVegetableStore = create((set, get) => ({
 
   // =====================
   // ADD PRICE RECORD
-  // silent = true skips Swal alerts (used during bulk Excel import)
+  // Only commodity_id, market_id, and price_date are required —
+  // prevailing_price may be null (e.g. PDF rows with no price data)
+  // silent = true skips Swal alerts (used during bulk import)
   // =====================
   addPriceRecord: async (formData, silent = false) => {
-    if (!formData.commodity_id || !formData.market_id || !formData.price_date || !formData.prevailing_price) {
+    if (!formData.commodity_id || !formData.market_id || !formData.price_date) {
       if (!silent) {
         Swal.fire({
           icon: "warning",
           title: "Missing Fields",
-          text: "Please fill all required fields."
+          text: "Commodity, market, and date are required."
         })
       }
       return { success: false }
@@ -239,7 +242,7 @@ export const useVegetableStore = create((set, get) => ({
       }
 
     } catch (err) {
-      // 409 = duplicate record for that date
+      // 409 = duplicate record for that commodity + market + date
       if (err.response?.status === 409) {
         return { success: false, duplicate: true }
       }
@@ -308,8 +311,12 @@ export const useVegetableStore = create((set, get) => ({
       return { success: false }
     }
   },
+
+  // =====================
+  // EXTRACT PDF
+  // =====================
   extractPDF: async (file) => {
-  return await parsePDF(file)
-}
+    return await parsePDF(file)
+  }
 
 }))

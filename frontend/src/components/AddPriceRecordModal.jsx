@@ -4,7 +4,6 @@ import { IoCloseCircle, IoCalendar } from "react-icons/io5"
 import DatePicker from "react-datepicker"
 import "react-datepicker/dist/react-datepicker.css"
 
-// ─── Custom date input ────────────────────────────────────────────────────────
 const CustomInput = forwardRef(({ value, onClick }, ref) => (
   <div className="apr-date-wrap" onClick={onClick} ref={ref}>
     <input readOnly value={value} placeholder="Select a date…" className="apr-input" />
@@ -12,7 +11,6 @@ const CustomInput = forwardRef(({ value, onClick }, ref) => (
   </div>
 ))
 
-// ─── Prevailing price formula ─────────────────────────────────────────────────
 const calcPrevailing = (nums) => {
   if (nums.length === 0) return ""
   if (nums.length === 1) return nums[0]
@@ -30,7 +28,6 @@ const calcPrevailing = (nums) => {
     : Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 100) / 100
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
   const { addPriceRecord, commodities, markets, fetchCommodities, fetchMarkets } =
     useVegetableStore()
@@ -46,9 +43,12 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
     respondent_5: "",
   }
 
-  const [form, setForm]           = useState(emptyForm)
+  const [form, setForm]             = useState(emptyForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError]         = useState("")
+  const [error, setError]           = useState("")
+
+  // Whether a commodity was pre-selected from the table (locks the dropdown)
+  const isCommodityLocked = !!defaultCommodity
 
   useEffect(() => {
     if (isOpen) {
@@ -78,25 +78,25 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError("")
-    if (!form.commodity_id)       return setError("Please select a commodity.")
-    if (!form.market_id)          return setError("Please select a market.")
-    if (!form.price_date)         return setError("Please select a date.")
+    if (!form.commodity_id)        return setError("Please select a commodity.")
+    if (!form.market_id)           return setError("Please select a market.")
+    if (!form.price_date)          return setError("Please select a date.")
     if (computed.prevailing === "") return setError("Enter at least one respondent price.")
 
     setIsSubmitting(true)
     try {
       const result = await addPriceRecord({
-        commodity_id:    form.commodity_id,
-        market_id:       form.market_id,
-        price_date:      form.price_date.toISOString().split("T")[0],
-        respondent_1:    form.respondent_1 !== "" ? parseFloat(form.respondent_1) : null,
-        respondent_2:    form.respondent_2 !== "" ? parseFloat(form.respondent_2) : null,
-        respondent_3:    form.respondent_3 !== "" ? parseFloat(form.respondent_3) : null,
-        respondent_4:    form.respondent_4 !== "" ? parseFloat(form.respondent_4) : null,
-        respondent_5:    form.respondent_5 !== "" ? parseFloat(form.respondent_5) : null,
+        commodity_id:     form.commodity_id,
+        market_id:        form.market_id,
+        price_date:       form.price_date.toISOString().split("T")[0],
+        respondent_1:     form.respondent_1 !== "" ? parseFloat(form.respondent_1) : null,
+        respondent_2:     form.respondent_2 !== "" ? parseFloat(form.respondent_2) : null,
+        respondent_3:     form.respondent_3 !== "" ? parseFloat(form.respondent_3) : null,
+        respondent_4:     form.respondent_4 !== "" ? parseFloat(form.respondent_4) : null,
+        respondent_5:     form.respondent_5 !== "" ? parseFloat(form.respondent_5) : null,
         prevailing_price: computed.prevailing,
-        high_price:      computed.high,
-        low_price:       computed.low,
+        high_price:       computed.high,
+        low_price:        computed.low,
       })
       if (result?.duplicate) return setError("A record for this commodity, market, and date already exists.")
       OnClose()
@@ -140,12 +140,10 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
           to   { opacity:1; transform:translateY(0)    scale(1)    }
         }
 
-        /* scrollbar */
         .apr-box::-webkit-scrollbar { width: 5px }
         .apr-box::-webkit-scrollbar-track { background: transparent }
         .apr-box::-webkit-scrollbar-thumb { background: #c8d8c4; border-radius: 10px }
 
-        /* ── Header ── */
         .apr-header {
           background: linear-gradient(135deg, #2d5a27 0%, #3d7a35 60%, #4a9040 100%);
           padding: 28px 28px 24px;
@@ -190,7 +188,6 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
         }
         .apr-close:hover { background:rgba(255,255,255,0.22); color:#fff }
 
-        /* ── Body ── */
         .apr-body { padding:24px 28px; display:flex; flex-direction:column; gap:16px }
 
         .apr-field { display:flex; flex-direction:column; gap:6px }
@@ -215,6 +212,22 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
           box-shadow:0 0 0 3px rgba(61,122,53,0.12);
         }
 
+        /* Locked commodity display */
+        .apr-locked {
+          width:100%; padding:11px 14px;
+          border-radius:10px; border:1.5px solid #e2e8de;
+          background:#f4f7f2; font-family:'DM Sans',sans-serif;
+          font-size:14px; color:#3a5235; outline:none;
+          box-sizing: border-box;
+          display:flex; align-items:center; justify-content:space-between;
+          cursor:default;
+        }
+        .apr-locked-badge {
+          font-size:10px; font-weight:600; letter-spacing:0.06em;
+          text-transform:uppercase; color:#7a9475;
+          background:#e4efe2; border-radius:6px; padding:2px 7px;
+        }
+
         .apr-select-wrap { position:relative }
         .apr-select-wrap::after {
           content:''; position:absolute; right:14px; top:50%;
@@ -226,7 +239,6 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
           pointer-events:none;
         }
 
-        /* date */
         .apr-date-wrap {
           position:relative; cursor:pointer;
           display:flex; align-items:center;
@@ -237,7 +249,6 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
           color:#7a9475; pointer-events:none;
         }
 
-        /* ── Respondents grid ── */
         .apr-respondents {
           display:grid; grid-template-columns:repeat(5,1fr); gap:8px;
         }
@@ -261,7 +272,6 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
         }
         .apr-r-input::placeholder { color:#cdd9ca }
 
-        /* ── Computed card ── */
         .apr-computed {
           background:linear-gradient(135deg,#f0f7ee,#e8f4e5);
           border:1.5px solid #c8dfc4;
@@ -286,24 +296,19 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
           font-size:10.5px; color:#7a9475; font-weight:500;
           letter-spacing:0.04em; text-transform:uppercase; margin-bottom:4px;
         }
-        .apr-computed-item-val {
-          font-size:17px; font-weight:700;
-        }
+        .apr-computed-item-val { font-size:17px; font-weight:700; }
         .apr-computed-item-val.prevailing { color:#2d5a27 }
         .apr-computed-item-val.high       { color:#3d7a35 }
         .apr-computed-item-val.low        { color:#5a9050 }
         .apr-computed-item-val.empty      { color:#cdd9ca; font-weight:400; font-size:14px }
 
-        /* ── Error ── */
         .apr-error {
           background:#fff5f5; border:1.5px solid #fcc; border-radius:10px;
           padding:10px 14px; font-size:13px; color:#c0392b; text-align:center;
         }
 
-        /* ── Divider ── */
         .apr-divider { height:1px; background:#edf0ea; margin:0 }
 
-        /* ── Footer ── */
         .apr-footer {
           padding:20px 28px; display:flex; gap:10px; justify-content:flex-end;
         }
@@ -337,7 +342,6 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
         }
         @keyframes apr-spin { to { transform:rotate(360deg) } }
 
-        /* DatePicker overrides */
         .react-datepicker { font-family:'DM Sans',sans-serif !important; border-radius:12px !important; border:1.5px solid #e2e8de !important; overflow:hidden }
         .react-datepicker__header { background:#f0f7ee !important; border-bottom:1px solid #e2e8de !important }
         .react-datepicker__current-month { color:#2d5a27 !important; font-weight:600 !important }
@@ -364,18 +368,27 @@ const AddPriceRecordModal = ({ isOpen, OnClose, defaultCommodity = null }) => {
 
               {/* Commodity + Market side by side */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px" }}>
+
+                {/* Commodity — locked display when opened from table, dropdown otherwise */}
                 <div className="apr-field">
                   <label className="apr-label">Commodity</label>
-                  <div className="apr-select-wrap">
-                    <select name="commodity_id" className="apr-select" value={form.commodity_id} onChange={handleChange}>
-                      <option value="">Select…</option>
-                      {commodities.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}{c.category ? ` (${c.category})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {isCommodityLocked ? (
+                    <div className="apr-locked">
+                      <span>{defaultCommodity.name}{defaultCommodity.category ? ` (${defaultCommodity.category})` : ""}</span>
+                      <span className="apr-locked-badge">locked</span>
+                    </div>
+                  ) : (
+                    <div className="apr-select-wrap">
+                      <select name="commodity_id" className="apr-select" value={form.commodity_id} onChange={handleChange}>
+                        <option value="">Select…</option>
+                        {commodities.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}{c.category ? ` (${c.category})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 <div className="apr-field">

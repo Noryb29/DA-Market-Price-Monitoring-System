@@ -3,6 +3,8 @@ import { useVegetableStore } from "../store/VegetableStore"
 import Swal from "sweetalert2"
 import EditCommodityModal from "../helperComponents/EditCommodityModal.jsx"
 import PriceHistoryModal from "../helperComponents/PriceHistoryModal.jsx"
+import RespondentHistoryModal from "../helperComponents/RespondentHistoryModal.jsx"
+import AddPriceRecordModal from './AddPriceRecordModal.jsx'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (val) =>
@@ -15,7 +17,7 @@ const fmtDate = (dateStr) => {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) => {
+const CommodityTable = ({ search = "", categoryFilter = "" }) => {
   const {
     vegetables,
     categories,
@@ -27,6 +29,8 @@ const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) 
 
   const [editTarget, setEditTarget]                   = useState(null)
   const [historyTarget, setHistoryTarget]             = useState(null)
+  const [addPriceTarget, setAddPriceTarget]           = useState(null)
+  const [respondentTarget, setRespondentTarget]       = useState(null)
   const [expandedRespondents, setExpandedRespondents] = useState({})
   const [marketFilter, setMarketFilter]               = useState("")
 
@@ -91,8 +95,13 @@ const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) 
     setEditTarget(null)
   }
 
-  const toggleRespondents = (id) =>
-    setExpandedRespondents((prev) => ({ ...prev, [id]: !prev[id] }))
+  // After a price record is added, refresh vegetables so the table updates
+  const handleAddPriceClose = () => {
+    setAddPriceTarget(null)
+    fetchVegetables()
+  }
+
+  const toggleRespondents = () => {} // kept for safety, no longer used
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -147,14 +156,14 @@ const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) 
               <th rowSpan={2} className="text-center align-bottom">Actions</th>
             </tr>
 
-            {/* Row 2: Prev / High / Low — or placeholder when no market yet */}
+            {/* Row 2: High / Low / Prevailing — or placeholder when no market yet */}
             <tr className="text-xs text-gray-400">
               {visibleMarkets.length > 0 ? (
                 visibleMarkets.map((m) => (
                   <React.Fragment key={m}>
-                    <th className="text-center font-normal border-l border-base-300">Prev.</th>
-                    <th className="text-center font-normal">High</th>
+                    <th className="text-center font-normal border-l border-base-300">High</th>
                     <th className="text-center font-normal">Low</th>
+                    <th className="text-center font-normal font-semibold text-green-700">Prevailing</th>
                   </React.Fragment>
                 ))
               ) : (
@@ -217,18 +226,18 @@ const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) 
                             return (
                               <React.Fragment key={m}>
                                 <td className="text-center text-xs border-l border-base-300">
-                                  {prices?.prevailing != null
-                                    ? <span className="text-green-700 font-semibold">{fmt(prices.prevailing)}</span>
-                                    : <span className="text-gray-300">—</span>}
-                                </td>
-                                <td className="text-center text-xs">
                                   {prices?.high != null
-                                    ? <span>{fmt(prices.high)}</span>
+                                    ? <span className="font-semibold">{fmt(prices.high)}</span>
                                     : <span className="text-gray-300">—</span>}
                                 </td>
                                 <td className="text-center text-xs">
                                   {prices?.low != null
                                     ? <span>{fmt(prices.low)}</span>
+                                    : <span className="text-gray-300">—</span>}
+                                </td>
+                                <td className="text-center text-xs">
+                                  {prices?.prevailing != null
+                                    ? <span className="font-semibold text-green-700">{fmt(prices.prevailing)}</span>
                                     : <span className="text-gray-300">—</span>}
                                 </td>
                               </React.Fragment>
@@ -240,10 +249,10 @@ const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) 
                             <div className="flex items-center gap-1 justify-center">
                               <button
                                 className="btn btn-xs btn-ghost tooltip tooltip-top"
-                                data-tip="Respondents"
-                                onClick={() => toggleRespondents(veg.id)}
+                                data-tip="Respondent History"
+                                onClick={() => setRespondentTarget(veg)}
                               >
-                                {expandedRespondents[veg.id] ? "▲" : "▼"}
+                                📋
                               </button>
                               <button
                                 className="btn btn-xs btn-ghost tooltip tooltip-top"
@@ -255,7 +264,7 @@ const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) 
                               <button
                                 className="btn btn-xs btn-ghost tooltip tooltip-top"
                                 data-tip="Add Price Record"
-                                onClick={() => onAddPriceRecord?.(veg)}
+                                onClick={() => setAddPriceTarget(veg)}
                               >
                                 ➕
                               </button>
@@ -276,29 +285,6 @@ const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) 
                             </div>
                           </td>
                         </tr>
-
-                        {/* Respondents expandable row */}
-                        {expandedRespondents[veg.id] && (
-                          <tr className="bg-base-200">
-                            <td colSpan={colSpanTotal} className="py-2 px-6">
-                              <div className="flex flex-wrap gap-4 text-xs text-gray-600">
-                                <span className="font-semibold text-gray-500">Respondents:</span>
-                                {[1, 2, 3, 4, 5].map((n) => {
-                                    const prices = veg.markets?.[marketFilter]   // ← use marketFilter
-                                    const val = prices?.[`respondent_${n}`]      // ← pull from market data
-                                  return (
-                                    <span key={n} className="flex items-center gap-1">
-                                      <span className="badge badge-ghost badge-sm">R{n}</span>
-                                      <span className={val != null ? "font-medium" : "text-gray-300"}>
-                                        {val != null ? `₱${val}` : "n/a"}
-                                      </span>
-                                    </span>
-                                  )
-                                })}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
 
                       </React.Fragment>
                     ))}
@@ -332,6 +318,20 @@ const CommodityTable = ({ onAddPriceRecord, search = "", categoryFilter = "" }) 
         commodity={historyTarget}
         isOpen={!!historyTarget}
         onClose={() => setHistoryTarget(null)}
+      />
+
+      {/* AddPriceRecordModal — pre-selects the clicked commodity */}
+      <AddPriceRecordModal
+        isOpen={!!addPriceTarget}
+        defaultCommodity={addPriceTarget}
+        OnClose={handleAddPriceClose}
+      />
+
+      {/* RespondentHistoryModal */}
+      <RespondentHistoryModal
+        commodity={respondentTarget}
+        isOpen={!!respondentTarget}
+        onClose={() => setRespondentTarget(null)}
       />
     </div>
   )
