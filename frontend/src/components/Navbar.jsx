@@ -22,18 +22,18 @@ const Navbar = () => {
             </Link>
 
             <Link
-              to="/"
+              to="/charts"
               className="text-gray-600 hover:text-black transition"
             >
-              About
+              Charts
             </Link>
-
+{/* 
             <Link
               to="/"
               className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition"
             >
               Login
-            </Link>
+            </Link> */}
           </div>
 
         </div>

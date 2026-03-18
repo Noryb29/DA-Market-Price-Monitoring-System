@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router-dom'
 import Layout from './Layout.jsx'
 import App from './App.jsx'
 import ErrorElement from './components/ErrorElement.jsx'
+import Charts from './pages/Charts.jsx'
 
 const router = createBrowserRouter([
     {
@@ -10,7 +11,8 @@ const router = createBrowserRouter([
         element: <Layout/>,
         errorElement:<ErrorElement/>,
         children: [
-            { index: true,element:<App/> }
+            { index: true,element:<App/> },
+            { path:'/charts',element:<Charts/>}
         ]
     }
 ])

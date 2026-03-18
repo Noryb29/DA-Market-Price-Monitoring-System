@@ -6,9 +6,7 @@ import PriceHistoryModal from "../helperComponents/PriceHistoryModal.jsx"
 import RespondentHistoryModal from "../helperComponents/RespondentHistoryModal.jsx"
 import AddPriceRecordModal from './AddPriceRecordModal.jsx'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const fmt = (val) =>
-  val != null ? `₱${Number(val).toFixed(2)}` : null
+const fmt = (val) => val != null ? `₱${Number(val).toFixed(2)}` : null
 
 const fmtDate = (dateStr) => {
   if (!dateStr) return "—"
@@ -16,7 +14,16 @@ const fmtDate = (dateStr) => {
   return new Date(+y, +m - 1, +d).toLocaleDateString()
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+const CountBadge = ({ count }) => {
+  const n = Number(count ?? 0)
+  if (n === 0) return <span className="text-[10px] text-gray-300 leading-none">0</span>
+  return (
+    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-green-100 text-green-700 text-[10px] font-semibold leading-none">
+      {n > 99 ? "99+" : n}
+    </span>
+  )
+}
+
 const CommodityTable = ({ search = "", categoryFilter = "" }) => {
   const {
     vegetables,
@@ -27,44 +34,31 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
     updateCommodity,
   } = useVegetableStore()
 
-  const [editTarget, setEditTarget]                   = useState(null)
-  const [historyTarget, setHistoryTarget]             = useState(null)
-  const [addPriceTarget, setAddPriceTarget]           = useState(null)
-  const [respondentTarget, setRespondentTarget]       = useState(null)
-  const [expandedRespondents, setExpandedRespondents] = useState({})
-  const [marketFilter, setMarketFilter]               = useState("")
+  const [editTarget, setEditTarget]             = useState(null)
+  const [historyTarget, setHistoryTarget]       = useState(null)
+  const [addPriceTarget, setAddPriceTarget]     = useState(null)
+  const [respondentTarget, setRespondentTarget] = useState(null)
+  const [marketFilter, setMarketFilter]         = useState("")
 
   useEffect(() => {
     fetchVegetables()
     fetchCategories()
   }, [])
 
-  // ── All markets (stable sorted) ───────────────────────────────────────────
-  const allMarkets = [
-    ...new Set(vegetables.flatMap((v) => Object.keys(v.markets ?? {}))),
-  ]
+  const allMarkets = [...new Set(vegetables.flatMap((v) => Object.keys(v.markets ?? {})))]
     .filter(Boolean)
     .sort()
 
-  // ── Auto-select first market once data loads; never allow empty selection ──
   useEffect(() => {
-    if (allMarkets.length > 0 && !marketFilter) {
-      setMarketFilter(allMarkets[0])
-    }
+    if (allMarkets.length > 0 && !marketFilter) setMarketFilter(allMarkets[0])
   }, [allMarkets.join(",")])
 
-  // ── Filter by search + category ───────────────────────────────────────────
   const filtered = vegetables.filter((v) => {
-    const matchSearch = search
-      ? v.name?.toLowerCase().includes(search.toLowerCase())
-      : true
-    const matchCat = categoryFilter
-      ? v.categories?.toLowerCase() === categoryFilter.toLowerCase()
-      : true
+    const matchSearch = search ? v.name?.toLowerCase().includes(search.toLowerCase()) : true
+    const matchCat    = categoryFilter ? v.categories?.toLowerCase() === categoryFilter.toLowerCase() : true
     return matchSearch && matchCat
   })
 
-  // ── Group by category ─────────────────────────────────────────────────────
   const grouped = filtered.reduce((acc, v) => {
     const cat = v.categories || "Uncategorized"
     if (!acc[cat]) acc[cat] = []
@@ -72,11 +66,9 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
     return acc
   }, {})
 
-  // ── Visible columns — always exactly one market ───────────────────────────
   const visibleMarkets = allMarkets.filter((m) => m === marketFilter)
   const colSpanTotal   = 4 + visibleMarkets.length * 3 + 1
 
-  // ── Actions ───────────────────────────────────────────────────────────────
   const handleDelete = async (commodity) => {
     const result = await Swal.fire({
       icon: "warning",
@@ -95,40 +87,29 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
     setEditTarget(null)
   }
 
-  // After a price record is added, refresh vegetables so the table updates
   const handleAddPriceClose = () => {
     setAddPriceTarget(null)
     fetchVegetables()
   }
 
-  const toggleRespondents = () => {} // kept for safety, no longer used
-
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-4 w-full">
 
-      {/* Result count */}
       <div className="flex items-center justify-end">
         <span className="text-xs text-gray-400">
           {filtered.length} commodit{filtered.length !== 1 ? "ies" : "y"}
         </span>
       </div>
 
-      {/* ── Table ── */}
       <div className="overflow-x-auto rounded-xl border border-base-300 bg-base-100">
         <table className="table table-sm table-zebra w-full">
 
-          {/* ── Head ── */}
           <thead className="bg-base-200 z-10">
-
-            {/* Row 1 */}
             <tr>
               <th rowSpan={2} className="align-bottom">Commodity</th>
               <th rowSpan={2} className="align-bottom">Specification</th>
               <th rowSpan={2} className="align-bottom">Category</th>
               <th rowSpan={2} className="align-bottom">Date</th>
-
-              {/* Market header + dropdown */}
               <th
                 colSpan={Math.max(visibleMarkets.length * 3, 1)}
                 className="text-center border-l border-base-300 pb-2"
@@ -138,25 +119,18 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
                   <select
                     className="select select-xs select-bordered font-normal text-xs max-w-[220px]"
                     value={marketFilter}
-                    onChange={(e) => {
-                      if (e.target.value) setMarketFilter(e.target.value)
-                    }}
+                    onChange={(e) => { if (e.target.value) setMarketFilter(e.target.value) }}
                   >
-                    {allMarkets.length === 0 ? (
-                      <option value="">No Market Selected</option>
-                    ) : (
-                      allMarkets.map((m) => (
-                        <option key={m} value={m}>{m}</option>
-                      ))
-                    )}
+                    {allMarkets.length === 0
+                      ? <option value="">No Market Selected</option>
+                      : allMarkets.map((m) => <option key={m} value={m}>{m}</option>)
+                    }
                   </select>
                 </div>
               </th>
-
               <th rowSpan={2} className="text-center align-bottom">Actions</th>
             </tr>
 
-            {/* Row 2: High / Low / Prevailing — or placeholder when no market yet */}
             <tr className="text-xs text-gray-400">
               {visibleMarkets.length > 0 ? (
                 visibleMarkets.map((m) => (
@@ -174,9 +148,7 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
             </tr>
           </thead>
 
-          {/* ── Body ── */}
           <tbody>
-            {/* No market selected state */}
             {visibleMarkets.length === 0 ? (
               <tr>
                 <td colSpan={colSpanTotal} className="text-center text-gray-400 py-10">
@@ -192,61 +164,48 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
                 {Object.entries(grouped).map(([category, rows]) => (
                   <React.Fragment key={category}>
 
-                    {/* Category divider */}
                     <tr className="bg-green-50">
-                      <td
-                        colSpan={colSpanTotal}
-                        className="text-xs font-bold text-green-700 uppercase tracking-wide py-2 px-4"
-                      >
+                      <td colSpan={colSpanTotal} className="text-xs font-bold text-green-700 uppercase tracking-wide py-2 px-4">
                         {category}
                       </td>
                     </tr>
 
                     {rows.map((veg) => (
-                      <React.Fragment key={veg.id}>
+                      <tr key={veg.id} className="hover:bg-base-200 transition-colors">
+                        <td className="font-medium whitespace-nowrap">{veg.name}</td>
+                        <td className="text-gray-500 text-xs">{veg.specification || "—"}</td>
+                        <td>
+                          <span className="badge badge-outline badge-sm text-xs">{veg.categories}</span>
+                        </td>
+                        <td className="text-xs text-gray-500 whitespace-nowrap">{fmtDate(veg.price_date)}</td>
 
-                        <tr className="hover:bg-base-200 transition-colors">
+                        {visibleMarkets.map((m) => {
+                          const prices = veg.markets?.[m]
+                          return (
+                            <React.Fragment key={m}>
+                              <td className="text-center text-xs border-l border-base-300">
+                                {prices?.high != null
+                                  ? <span className="font-semibold">{fmt(prices.high)}</span>
+                                  : <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="text-center text-xs">
+                                {prices?.low != null
+                                  ? <span>{fmt(prices.low)}</span>
+                                  : <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="text-center text-xs">
+                                {prices?.prevailing != null
+                                  ? <span className="font-semibold text-green-700">{fmt(prices.prevailing)}</span>
+                                  : <span className="text-gray-300">—</span>}
+                              </td>
+                            </React.Fragment>
+                          )
+                        })}
 
-                          <td className="font-medium whitespace-nowrap">{veg.name}</td>
+                        <td>
+                          <div className="flex items-center gap-2 justify-center">
 
-                          <td className="text-gray-500 text-xs">{veg.specification || "—"}</td>
-
-                          <td>
-                            <span className="badge badge-outline badge-sm text-xs">
-                              {veg.categories}
-                            </span>
-                          </td>
-
-                          <td className="text-xs text-gray-500 whitespace-nowrap">
-                            {fmtDate(veg.price_date)}
-                          </td>
-
-                          {visibleMarkets.map((m) => {
-                            const prices = veg.markets?.[m]
-                            return (
-                              <React.Fragment key={m}>
-                                <td className="text-center text-xs border-l border-base-300">
-                                  {prices?.high != null
-                                    ? <span className="font-semibold">{fmt(prices.high)}</span>
-                                    : <span className="text-gray-300">—</span>}
-                                </td>
-                                <td className="text-center text-xs">
-                                  {prices?.low != null
-                                    ? <span>{fmt(prices.low)}</span>
-                                    : <span className="text-gray-300">—</span>}
-                                </td>
-                                <td className="text-center text-xs">
-                                  {prices?.prevailing != null
-                                    ? <span className="font-semibold text-green-700">{fmt(prices.prevailing)}</span>
-                                    : <span className="text-gray-300">—</span>}
-                                </td>
-                              </React.Fragment>
-                            )
-                          })}
-
-                          {/* Actions */}
-                          <td>
-                            <div className="flex items-center gap-1 justify-center">
+                            <div className="flex flex-col items-center gap-0.5">
                               <button
                                 className="btn btn-xs btn-ghost tooltip tooltip-top"
                                 data-tip="Respondent History"
@@ -254,6 +213,10 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
                               >
                                 📋
                               </button>
+                              <CountBadge count={veg.respondent_count} />
+                            </div>
+
+                            <div className="flex flex-col items-center gap-0.5">
                               <button
                                 className="btn btn-xs btn-ghost tooltip tooltip-top"
                                 data-tip="Price History"
@@ -261,37 +224,37 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
                               >
                                 📈
                               </button>
-                              <button
-                                className="btn btn-xs btn-ghost tooltip tooltip-top"
-                                data-tip="Add Price Record"
-                                onClick={() => setAddPriceTarget(veg)}
-                              >
-                                ➕
-                              </button>
-                              <button
-                                className="btn btn-xs btn-ghost tooltip tooltip-top"
-                                data-tip="Edit"
-                                onClick={() => setEditTarget(veg)}
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                className="btn btn-xs btn-ghost text-red-400 tooltip tooltip-top"
-                                data-tip="Delete"
-                                onClick={() => handleDelete(veg)}
-                              >
-                                🗑️
-                              </button>
+                              <CountBadge count={veg.price_count} />
                             </div>
-                          </td>
-                        </tr>
 
-                      </React.Fragment>
+                            <button
+                              className="btn btn-xs btn-ghost tooltip tooltip-top"
+                              data-tip="Add Price Record"
+                              onClick={() => setAddPriceTarget(veg)}
+                            >
+                              ➕
+                            </button>
+                            <button
+                              className="btn btn-xs btn-ghost tooltip tooltip-top"
+                              data-tip="Edit"
+                              onClick={() => setEditTarget(veg)}
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className="btn btn-xs btn-ghost text-red-400 tooltip tooltip-top"
+                              data-tip="Delete"
+                              onClick={() => handleDelete(veg)}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                     ))}
                   </React.Fragment>
                 ))}
 
-                {/* No commodities match filters */}
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan={colSpanTotal} className="text-center text-gray-400 py-10">
@@ -305,7 +268,6 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
         </table>
       </div>
 
-      {/* ── Modals ── */}
       <EditCommodityModal
         commodity={editTarget}
         categories={categories}
@@ -313,21 +275,16 @@ const CommodityTable = ({ search = "", categoryFilter = "" }) => {
         onClose={() => setEditTarget(null)}
         onSave={handleSaveEdit}
       />
-
       <PriceHistoryModal
         commodity={historyTarget}
         isOpen={!!historyTarget}
         onClose={() => setHistoryTarget(null)}
       />
-
-      {/* AddPriceRecordModal — pre-selects the clicked commodity */}
       <AddPriceRecordModal
         isOpen={!!addPriceTarget}
         defaultCommodity={addPriceTarget}
         OnClose={handleAddPriceClose}
       />
-
-      {/* RespondentHistoryModal */}
       <RespondentHistoryModal
         commodity={respondentTarget}
         isOpen={!!respondentTarget}

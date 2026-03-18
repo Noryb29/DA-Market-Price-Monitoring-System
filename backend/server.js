@@ -3,6 +3,7 @@ import cors from "cors"
 import { VegetableRouter } from "./routes/VegetableRoutes.js"
 import { initializeDb } from "./db.js"
 import dotenv from 'dotenv'
+import AnalyticsRoutes from "./routes/AnalyticsRoutes.js"
 
 dotenv.config()
 
@@ -20,6 +21,7 @@ app.get("/", (req, res) => {
 })
 
 app.use("/api/vegetables", VegetableRouter)
+app.use("/api/analytics",AnalyticsRoutes)
 
 const run = async () => {
   try {

@@ -1,9 +1,7 @@
 import { db } from "../db.js"
 
-// GET ALL VEGETABLES WITH PRICES
 export const getVegetables = async (req, res) => {
   try {
-
     if (!db) {
       return res.status(500).json({
         success: false,
@@ -11,35 +9,50 @@ export const getVegetables = async (req, res) => {
       })
     }
 
-    const query = `
-        SELECT 
-          c.id AS commodity_id,
-          c.name,
-          c.specification,
-          cat.name AS category,
-          pr.price_date,
-          m.name AS market_name,
-          pr.prevailing_price,
-          pr.high_price,
-          pr.low_price,
-          pr.respondent_1,
-          pr.respondent_2,
-          pr.respondent_3,
-          pr.respondent_4,
-          pr.respondent_5
-        FROM commodities c
-        JOIN categories cat ON c.category_id = cat.id
-        LEFT JOIN price_records pr ON pr.commodity_id = c.id
-        LEFT JOIN markets m ON pr.market_id = m.id
-        ORDER BY c.name;
-      `
+   const query = `
+  SELECT 
+    c.id AS commodity_id,
+    c.name,
+    c.specification,
+    cat.name AS category,
+    pr.price_date,
+    m.name AS market_name,
+    pr.prevailing_price,
+    pr.high_price,
+    pr.low_price,
+    pr.respondent_1,
+    pr.respondent_2,
+    pr.respondent_3,
+    pr.respondent_4,
+    pr.respondent_5,
+    (
+      SELECT COUNT(*) 
+      FROM price_records 
+      WHERE commodity_id = c.id
+    ) AS price_count,
+    (
+      SELECT COUNT(*) 
+      FROM price_records
+      WHERE commodity_id = c.id
+        AND (
+          respondent_1 IS NOT NULL OR
+          respondent_2 IS NOT NULL OR
+          respondent_3 IS NOT NULL OR
+          respondent_4 IS NOT NULL OR
+          respondent_5 IS NOT NULL
+        )
+    ) AS respondent_count
+  FROM commodities c
+  JOIN categories cat ON c.category_id = cat.id
+  LEFT JOIN price_records pr ON pr.commodity_id = c.id
+  LEFT JOIN markets m ON pr.market_id = m.id
+  ORDER BY c.name;
+`
 
     const [rows] = await db.query(query)
 
     if (!rows || rows.length === 0) {
-      return res.status(404).json({
-        success: false
-      })
+      return res.status(404).json({ success: false })
     }
 
     return res.status(200).json({
@@ -52,77 +65,42 @@ export const getVegetables = async (req, res) => {
     console.error("Vegetable Controller Error:", error)
 
     if (error.code === "ER_BAD_FIELD_ERROR") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid database column"
-      })
+      return res.status(400).json({ success: false, message: "Invalid database column" })
     }
-
     if (error.code === "ER_NO_SUCH_TABLE") {
-      return res.status(500).json({
-        success: false,
-        message: "Database table missing"
-      })
+      return res.status(500).json({ success: false, message: "Database table missing" })
     }
 
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",
-      error: process.env.NODE_ENV === "development"
-        ? error.message
-        : undefined
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
     })
   }
 }
 
-// GET ALL MARKETS
 export const getMarkets = async (req, res) => {
   try {
-
     const [rows] = await db.query("SELECT * FROM markets ORDER BY name")
-
-    return res.status(200).json({
-      success: true,
-      count: rows.length,
-      data: rows
-    })
-
+    return res.status(200).json({ success: true, count: rows.length, data: rows })
   } catch (error) {
     console.error("Get Markets Error:", error)
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch markets"
-    })
+    return res.status(500).json({ success: false, message: "Failed to fetch markets" })
   }
 }
 
-// GET ALL CATEGORIES
 export const getCategories = async (req, res) => {
   try {
-
     const [rows] = await db.query("SELECT * FROM categories ORDER BY name")
-
-    return res.status(200).json({
-      success: true,
-      count: rows.length,
-      data: rows
-    })
-
+    return res.status(200).json({ success: true, count: rows.length, data: rows })
   } catch (error) {
     console.error("Get Categories Error:", error)
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch categories"
-    })
+    return res.status(500).json({ success: false, message: "Failed to fetch categories" })
   }
 }
 
-// GET ALL COMMODITIES
 export const getCommodities = async (req, res) => {
   try {
-
     const query = `
       SELECT 
         c.id,
@@ -133,31 +111,17 @@ export const getCommodities = async (req, res) => {
       JOIN categories cat ON c.category_id = cat.id
       ORDER BY c.name
     `
-
     const [rows] = await db.query(query)
-
-    return res.status(200).json({
-      success: true,
-      count: rows.length,
-      data: rows
-    })
-
+    return res.status(200).json({ success: true, count: rows.length, data: rows })
   } catch (error) {
     console.error("Get Commodities Error:", error)
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch commodities"
-    })
+    return res.status(500).json({ success: false, message: "Failed to fetch commodities" })
   }
 }
 
-// GET PRICE HISTORY OF A COMMODITY
 export const getCommodityPrices = async (req, res) => {
   try {
-
     const { id } = req.params
-
     const query = `
       SELECT 
         c.name,
@@ -177,29 +141,16 @@ export const getCommodityPrices = async (req, res) => {
       WHERE c.id = ?
       ORDER BY pr.price_date DESC
     `
-
     const [rows] = await db.query(query, [id])
-
-    return res.status(200).json({
-      success: true,
-      count: rows.length,
-      data: rows
-    })
-
+    return res.status(200).json({ success: true, count: rows.length, data: rows })
   } catch (error) {
     console.error("Commodity Price Error:", error)
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch commodity prices"
-    })
+    return res.status(500).json({ success: false, message: "Failed to fetch commodity prices" })
   }
 }
 
-// GET LATEST PRICES
 export const getLatestPrices = async (req, res) => {
   try {
-
     const query = `
       SELECT 
         c.name,
@@ -212,89 +163,50 @@ export const getLatestPrices = async (req, res) => {
       JOIN commodities c ON pr.commodity_id = c.id
       JOIN markets m ON pr.market_id = m.id
       WHERE pr.price_date = (
-        SELECT MAX(price_date)
-        FROM price_records
+        SELECT MAX(price_date) FROM price_records
       )
       ORDER BY c.name
     `
-
     const [rows] = await db.query(query)
-
-    return res.status(200).json({
-      success: true,
-      data: rows
-    })
-
+    return res.status(200).json({ success: true, data: rows })
   } catch (error) {
     console.error("Latest Price Error:", error)
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch latest prices"
-    })
+    return res.status(500).json({ success: false, message: "Failed to fetch latest prices" })
   }
 }
 
 export const addCommodity = async (req, res) => {
   try {
-
     const { category_id, name, specification } = req.body
 
     if (!category_id || !name) {
-      return res.status(400).json({
-        success: false,
-        message: "Category and name are required"
-      })
+      return res.status(400).json({ success: false, message: "Category and name are required" })
     }
 
-    const query = `
-      INSERT INTO commodities
-      (category_id, name, specification)
-      VALUES (?, ?, ?)
-    `
-
-    const [result] = await db.query(query, [
-      category_id,
-      name,
-      specification || null
-    ])
+    const [result] = await db.query(
+      `INSERT INTO commodities (category_id, name, specification) VALUES (?, ?, ?)`,
+      [category_id, name, specification || null]
+    )
 
     return res.status(201).json({
       success: true,
       message: "Commodity added successfully",
       id: result.insertId
     })
-
   } catch (error) {
-
     console.error("Add Commodity Error:", error)
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add commodity"
-    })
+    return res.status(500).json({ success: false, message: "Failed to add commodity" })
   }
 }
 
-// ADD PRICE RECORD
 export const addPriceRecord = async (req, res) => {
   try {
     const {
-      commodity_id,
-      market_id,
-      price_date,
-      respondent_1,
-      respondent_2,
-      respondent_3,
-      respondent_4,
-      respondent_5,
-      prevailing_price,
-      high_price,
-      low_price
+      commodity_id, market_id, price_date,
+      respondent_1, respondent_2, respondent_3, respondent_4, respondent_5,
+      prevailing_price, high_price, low_price
     } = req.body
 
-    // Only commodity, market, and date are truly required —
-    // prices may legitimately be null/blank from the PDF source
     if (!commodity_id || !market_id || !price_date) {
       return res.status(400).json({
         success: false,
@@ -302,14 +214,12 @@ export const addPriceRecord = async (req, res) => {
       })
     }
 
-    // Only one price record allowed per commodity + market + date
     const [existing] = await db.query(
       "SELECT id FROM price_records WHERE commodity_id = ? AND market_id = ? AND price_date = ?",
       [commodity_id, market_id, price_date]
     )
 
     if (existing.length > 0) {
-      // Return 409 with duplicate: true so the frontend can count it separately
       return res.status(409).json({
         success: false,
         duplicate: true,
@@ -317,40 +227,24 @@ export const addPriceRecord = async (req, res) => {
       })
     }
 
-    const query = `
-      INSERT INTO price_records
+    const [result] = await db.query(
+      `INSERT INTO price_records
         (commodity_id, market_id, price_date,
          respondent_1, respondent_2, respondent_3, respondent_4, respondent_5,
          prevailing_price, high_price, low_price)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        commodity_id, market_id, price_date,
+        respondent_1 ?? null, respondent_2 ?? null, respondent_3 ?? null,
+        respondent_4 ?? null, respondent_5 ?? null,
+        prevailing_price ?? null, high_price ?? null, low_price ?? null
+      ]
+    )
 
-    const [result] = await db.query(query, [
-      commodity_id,
-      market_id,
-      price_date,
-      respondent_1 ?? null,
-      respondent_2 ?? null,
-      respondent_3 ?? null,
-      respondent_4 ?? null,
-      respondent_5 ?? null,
-      prevailing_price ?? null,   // null is valid — commodity still gets recorded
-      high_price ?? null,
-      low_price ?? null
-    ])
-
-    return res.status(201).json({
-      success: true,
-      message: "Price record added",
-      id: result.insertId
-    })
-
+    return res.status(201).json({ success: true, message: "Price record added", id: result.insertId })
   } catch (error) {
     console.error("Add Price Error:", error)
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add price record"
-    })
+    return res.status(500).json({ success: false, message: "Failed to add price record" })
   }
 }
 
@@ -359,24 +253,16 @@ export const addCategory = async (req, res) => {
     const { name } = req.body
 
     if (!name) {
-      return res.status(400).json({
-        success: false,
-        message: "Category name is required"
-      })
+      return res.status(400).json({ success: false, message: "Category name is required" })
     }
 
-    // Check if already exists (case-insensitive)
     const [existing] = await db.query(
       "SELECT id FROM categories WHERE LOWER(name) = LOWER(?)",
       [name.trim()]
     )
 
     if (existing.length > 0) {
-      return res.status(200).json({
-        success: true,
-        message: "Category already exists",
-        id: existing[0].id
-      })
+      return res.status(200).json({ success: true, message: "Category already exists", id: existing[0].id })
     }
 
     const [result] = await db.query(
@@ -384,45 +270,28 @@ export const addCategory = async (req, res) => {
       [name.trim()]
     )
 
-    return res.status(201).json({
-      success: true,
-      message: "Category added successfully",
-      id: result.insertId
-    })
-
+    return res.status(201).json({ success: true, message: "Category added successfully", id: result.insertId })
   } catch (error) {
     console.error("Add Category Error:", error)
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add category"
-    })
+    return res.status(500).json({ success: false, message: "Failed to add category" })
   }
 }
 
-// ADD MARKET
 export const addMarket = async (req, res) => {
   try {
     const { name, city } = req.body
 
     if (!name) {
-      return res.status(400).json({
-        success: false,
-        message: "Market name is required"
-      })
+      return res.status(400).json({ success: false, message: "Market name is required" })
     }
 
-    // Check if already exists (case-insensitive)
     const [existing] = await db.query(
       "SELECT id FROM markets WHERE LOWER(name) = LOWER(?)",
       [name.trim()]
     )
 
     if (existing.length > 0) {
-      return res.status(200).json({
-        success: true,
-        message: "Market already exists",
-        id: existing[0].id
-      })
+      return res.status(200).json({ success: true, message: "Market already exists", id: existing[0].id })
     }
 
     const [result] = await db.query(
@@ -430,32 +299,20 @@ export const addMarket = async (req, res) => {
       [name.trim(), city?.trim() || ""]
     )
 
-    return res.status(201).json({
-      success: true,
-      message: "Market added successfully",
-      id: result.insertId
-    })
-
+    return res.status(201).json({ success: true, message: "Market added successfully", id: result.insertId })
   } catch (error) {
     console.error("Add Market Error:", error)
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add market"
-    })
+    return res.status(500).json({ success: false, message: "Failed to add market" })
   }
 }
 
-// UPDATE COMMODITY
 export const updateCommodity = async (req, res) => {
   try {
     const { id } = req.params
     const { category_id, name, specification } = req.body
 
     if (!category_id || !name) {
-      return res.status(400).json({
-        success: false,
-        message: "Category and name are required"
-      })
+      return res.status(400).json({ success: false, message: "Category and name are required" })
     }
 
     const [result] = await db.query(
@@ -468,19 +325,16 @@ export const updateCommodity = async (req, res) => {
     }
 
     return res.status(200).json({ success: true, message: "Commodity updated successfully" })
-
   } catch (error) {
     console.error("Update Commodity Error:", error)
     return res.status(500).json({ success: false, message: "Failed to update commodity" })
   }
 }
 
-// DELETE COMMODITY
 export const deleteCommodity = async (req, res) => {
   try {
     const { id } = req.params
 
-    // Delete price records first (foreign key constraint)
     await db.query("DELETE FROM price_records WHERE commodity_id = ?", [id])
 
     const [result] = await db.query("DELETE FROM commodities WHERE id = ?", [id])
@@ -490,7 +344,6 @@ export const deleteCommodity = async (req, res) => {
     }
 
     return res.status(200).json({ success: true, message: "Commodity deleted successfully" })
-
   } catch (error) {
     console.error("Delete Commodity Error:", error)
     return res.status(500).json({ success: false, message: "Failed to delete commodity" })
