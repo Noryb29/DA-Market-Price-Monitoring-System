@@ -18,6 +18,9 @@ const KNOWN_CATEGORIES = [
   "ROOTCROPS",
 ]
 
+const ROOTCROP_KEYWORDS = ["sweet potato", "cassava", "taro", "gabi", "kamote"]
+const FISH_KEYWORDS = ["bangus", "tilapia", "galunggong", "alumahan", "tuna", "mackerel", "squid", "crab", "shrimp", "lobster", "fish", "pusit", "hipon", "alimango"]
+
 // ─── Lines to skip entirely ───────────────────────────────────────────────────
 const SKIP_PATTERNS = [
   /prevailing\s+price/i,
@@ -44,7 +47,8 @@ const shortMarketName = (raw) => {
 // ─── Parse a price token — returns null for "n/a", number otherwise ──────────
 const parsePrice = (token) => {
   if (!token || /^n\/?a$/i.test(token.trim())) return null
-  const n = parseFloat(token.replace(/,/g, ""))
+  const cleaned = token.replace(/^[\₱P]\s*/, "").replace(/,/g, "")
+  const n = parseFloat(cleaned)
   return isNaN(n) ? null : n
 }
 
@@ -131,7 +135,7 @@ export const extractPDF = async (file) => {
     // ── 4. Parse price rows ───────────────────────────────────────────────────
     // Each data line: [commodity name + spec] [p1] [h1] [l1] [p2] [h2] [l2]
     // where market 1 = Carmen, market 2 = Cogon (left-to-right in PDF)
-    const priceToken = /^\d+(?:\.\d+)?$|^n\/?a$/i
+    const priceToken = /^[\₱P]?\s*\d{1,3}(?:,\d{3})*(?:\.\d{2})?$|^\d+(?:\.\d+)?$|^n\/?a$/i
     const rows       = []
     let currentCategory = null
 
@@ -173,6 +177,8 @@ export const extractPDF = async (file) => {
       // Everything before the first price token = commodity name + specification
       const namePart = tokens.slice(0, i0).join(" ").trim()
 
+      if (!namePart || namePart.length < 2) continue
+
       // ── Split name from specification ──
       // Spec patterns: "med(3-4pcs/kg)", "4-5 pcs/kg", "3-4 small bundles",
       //                "750 gm - 1 kg/head", "1 Liter/bottle", "8-10 pcs"
@@ -180,7 +186,7 @@ export const extractPDF = async (file) => {
       let specification  = null
 
       const specMatch = namePart.match(
-        /^(.+?)\s+((?:\d[\d\-\/.]*\s*(?:pcs|kg|gm|g|ml|liter|L|bundles?|bottle|head)[^\s]*.*|med\b|small\b|large\b|fully\s+dressed\b|medium\s+size\b|lean\s+meat.*|meat\s+w\/bones\b).*)$/i
+        /^(.+?)\s+((?:Blue|White|Yellow|Premium|Regular)\s+tag|(?:\d[\d\-\/.]*\s*(?:pcs|kg|gm|g|ml|liter|L|bundles?|bottle|head)[^\s]*.*|med\b|small\b|large\b|fully\s+dressed\b|medium\s+size\b|lean\s+meat.*|meat\s+w\/bones\b).*)$/i
       )
       if (specMatch) {
         commodity_name = specMatch[1].trim()
@@ -191,6 +197,74 @@ export const extractPDF = async (file) => {
         if (parenIdx > 0) {
           commodity_name = namePart.slice(0, parenIdx).trim()
           specification  = namePart.slice(parenIdx).trim()
+        }
+      }
+
+      if (!commodity_name || commodity_name.length < 2) continue
+
+      // Fix miscategorized items based on commodity name keywords
+      const lowerCommodity = commodity_name.toLowerCase()
+      if (ROOTCROP_KEYWORDS.some(kw => lowerCommodity.includes(kw))) {
+        currentCategory = "ROOTCROPS"
+      } else if (FISH_KEYWORDS.some(kw => lowerCommodity.includes(kw))) {
+        currentCategory = "FISH"
+      }
+
+      // Fix standalone "Yellow tag", "White tag", "Blue tag" - default to Sugar
+      if (/\btag$/i.test(commodity_name) || /\b(tag|white tag|yellow tag|blue tag)\b/i.test(commodity_name)) {
+        commodity_name = "Sugar"
+      }
+
+      // Fix "Well milled", "Regular milled", "Premium" - default to rice commodity
+      if (/\b(milled|premium)\b/i.test(commodity_name)) {
+        commodity_name = commodity_name + " Rice"
+      }
+
+      // Fix commodity name if it looks like a specification (e.g., "13-15 pcs/kg" where specMatch captured it)
+      if (/^\d+[\d\-\/]+\s*(pcs|kg|gm|g|ml|\/)/i.test(commodity_name)) {
+        // If spec was captured by regex, try to get commodity from tokens
+        const tokensBeforeSpec = tokens.slice(0, i0)
+        if (tokensBeforeSpec.length > 1) {
+          const potentialCommodity = tokensBeforeSpec.slice(0, -1).join(" ").trim()
+          if (potentialCommodity && !/^\d+[\d\-\/]+$/.test(potentialCommodity)) {
+            commodity_name = potentialCommodity
+          }
+        }
+        // Keep specification as is (already extracted by specMatch)
+      }
+
+      // Fix "Eggplant 3-4" -> commodity: Eggplant, spec: 3-4
+      const eggMatch = commodity_name.match(/^(Eggplant|Chayote|Cabbage|Baguio)\s+(\d+[\d\-]*)$/i)
+      if (eggMatch) {
+        commodity_name = eggMatch[1]
+        specification = eggMatch[2] + (specification ? " " + specification : "")
+      }
+
+      // Fix "8-10 pcs" or similar standalone specs - skip these rows
+      if (/^\d+[\d\-\/]+\s*(pcs|kg)$/i.test(commodity_name)) {
+        continue
+      }
+
+      // Fix "8-10" where commodity is just numbers - likely Cabbage spec
+      if (/^\d+[\d\-]+$/.test(commodity_name)) {
+        specification = commodity_name + (specification ? " " + specification : "") + " pcs"
+        // Try to find commodity from earlier in the tokens
+        const tokensBeforeSpec = tokens.slice(0, i0)
+        if (tokensBeforeSpec.length > 1) {
+          commodity_name = tokensBeforeSpec[0].trim()
+        } else {
+          commodity_name = "Cabbage"
+        }
+      }
+
+      // Fix "13-15" similar case - likely Ginger
+      if (/^\d+[\d\-]+$/.test(commodity_name)) {
+        specification = commodity_name + " pcs/kg"
+        const tokensBeforeSpec = tokens.slice(0, i0)
+        if (tokensBeforeSpec.length > 1) {
+          commodity_name = tokensBeforeSpec[0].trim()
+        } else {
+          commodity_name = "Ginger"
         }
       }
 
@@ -216,10 +290,10 @@ export const extractPDF = async (file) => {
       })
     }
 
-    return { price_date, markets, rows }
+    return { price_date, markets, rows: rows || [] }
 
   } catch (error) {
     console.error("PDF Extract Error:", error)
-    throw new Error("Failed to parse PDF")
+    throw new Error("Failed to parse PDF: " + error.message)
   }
 }

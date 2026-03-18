@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from "react"
 import Swal from "sweetalert2"
 import { useVegetableStore } from "../store/VegetableStore"
+import { extractPDF } from "../utils/extractPDF"
 
 
 
@@ -18,7 +19,6 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
     addCategory,
     addMarket,
     fetchVegetables,
-    extractPDF,
   } = useVegetableStore()
 
   const fileInputRef = useRef(null)
@@ -60,9 +60,6 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
 
   // ── Annotate rows ─────────────────────────────────────────────────────────
   const annotateRows = (parsed) => {
-    // Detect duplicates within the same file: commodity+market+date
-    const seenKeys = new Set()
-
     return parsed.map((row, index) => {
       const category = findCategory(row.category)
       const categoryId = category?.id ?? null
@@ -78,16 +75,6 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
       const errors = []
       if (!row.price_date) errors.push("Missing price date")
       if (!row.commodity_name?.trim()) errors.push("Blank commodity name")
-
-      // Within-file duplicate check
-      const dedupKey = `${row.commodity_name?.trim().toLowerCase()}::${row.market_name?.trim().toLowerCase()}::${row.price_date}`
-      if (dedupKey && errors.length === 0) {
-        if (seenKeys.has(dedupKey)) {
-          errors.push("Duplicate row in this file")
-        } else {
-          seenKeys.add(dedupKey)
-        }
-      }
 
       return {
         ...row,
@@ -111,6 +98,7 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
     setIsParsing(true)
     try {
       const extracted = await extractPDF(file)
+      console.log(JSON.stringify(extracted.rows,null,2))
 
       if (!extracted.rows || extracted.rows.length === 0) {
         Swal.fire({ icon: "warning", title: "No Data Found", text: "Could not extract any price rows from this PDF." })
@@ -160,12 +148,9 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
     const categoryCache = {}
     const commodityCache = {}
     const marketCache = {}
-    // Runtime dedup: track commodity_id+market_id+price_date combos already inserted this session
-    const insertedKeys = new Set()
 
     let successCount = 0
     let failCount = 0
-    let duplicateCount = 0
     let createdCount = 0
 
     for (let i = 0; i < processableRows.length; i++) {
@@ -214,13 +199,6 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
         }
 
         // 4. Price record — prevailing/high/low may all be null, that's fine
-        // Skip if this commodity+market+date was already inserted this session
-        const insertKey = `${commodity_id}::${market_id}::${row.price_date}`
-        if (insertedKeys.has(insertKey)) {
-          duplicateCount++
-          continue
-        }
-
         const result = await addPriceRecord({
           commodity_id,
           market_id,
@@ -235,8 +213,7 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
           low_price: row.low_price ?? null,
         })
 
-        if (result?.success) { successCount++; insertedKeys.add(insertKey) }
-        else if (result?.duplicate) duplicateCount++
+        if (result?.success) { successCount++ }
         else failCount++
 
       } catch (err) {
@@ -255,7 +232,6 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
       html: `
         <p><strong>${successCount}</strong> price record(s) inserted.</p>
         ${createdCount > 0 ? `<p><strong>${createdCount}</strong> new entry/entries auto-created.</p>` : ""}
-        ${duplicateCount > 0 ? `<p><strong>${duplicateCount}</strong> duplicate(s) skipped.</p>` : ""}
         ${failCount > 0 ? `<p><strong>${failCount}</strong> row(s) failed.</p>` : ""}
         ${skipped > 0 ? `<p><strong>${skipped}</strong> row(s) skipped due to errors.</p>` : ""}
       `,
@@ -390,18 +366,9 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
               {noPriceRows.length > 0 && (
                 <span className="badge badge-info">— {noPriceRows.length} no price</span>
               )}
-              {(() => {
-                const dupRows = rows.filter(r => r._errors.some(e => e.includes("Duplicate")))
-                return dupRows.length > 0
-                  ? <span className="badge badge-ghost">⊘ {dupRows.length} duplicate{dupRows.length !== 1 ? "s" : ""}</span>
-                  : null
-              })()}
-              {(() => {
-                const hardErrors = rows.filter(r => r._errors.length > 0 && !r._errors.every(e => e.includes("Duplicate")))
-                return hardErrors.length > 0
-                  ? <span className="badge badge-error">✕ {hardErrors.length} error{hardErrors.length !== 1 ? "s" : ""}</span>
-                  : null
-              })()}
+              {errorRows.length > 0 && (
+                <span className="badge badge-error">✕ {errorRows.length} error{errorRows.length !== 1 ? "s" : ""}</span>
+              )}
               <span className="text-xs text-gray-400 ml-auto">{fileName}</span>
               <button
                 className="btn btn-xs btn-ghost"
@@ -468,13 +435,7 @@ const ImportPDFModal = ({ isOpen, OnClose }) => {
                           <td>
                             {row._errors.length > 0 ? (
                               <div className="tooltip tooltip-left" data-tip={row._errors.join(" | ")}>
-                                <span className={`badge badge-sm cursor-help ${
-                                  row._errors.some(e => e.includes("Duplicate"))
-                                    ? "badge-ghost"
-                                    : "badge-error"
-                                }`}>
-                                  {row._errors.some(e => e.includes("Duplicate")) ? "⊘ dup" : "✕ error"}
-                                </span>
+                                <span className="badge badge-error badge-sm cursor-help">✕ error</span>
                               </div>
                             ) : row._willCreate.length > 0 ? (
                               <div className="tooltip tooltip-left" data-tip={`Will create: ${row._willCreate.join(", ")}`}>

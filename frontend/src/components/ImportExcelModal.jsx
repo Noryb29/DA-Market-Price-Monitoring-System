@@ -3,6 +3,40 @@ import * as XLSX from "xlsx"
 import Swal from "sweetalert2"
 import { useVegetableStore } from "../store/VegetableStore"
 
+// ─── Helper: robust numeric parsing ──────────────────────────────────────────
+const parseNumeric = (val) => {
+  if (val === null || val === undefined) return null
+  const str = String(val).trim().toLowerCase()
+  if (str === "" || str === "n/a" || str === "na" || str === "-" || str === "--" || str === "n.m." || str === "nm") return null
+  const f = parseFloat(val)
+  return isNaN(f) ? null : f
+}
+
+// ─── Helper: detect if row is a category header ───────────────────────────────
+const isCategoryRow = (row) => {
+  if (!row || row.length < 3) return false
+  const commodity = row[0]
+  const unit = row[2]
+  const hasCommodity = commodity !== null && String(commodity).trim().length > 0
+  const hasUnit = unit !== null && String(unit).trim().length > 0
+  const respondents = [row[3], row[4], row[5], row[6], row[7]]
+  const hasNumeric = respondents.some((v) => parseNumeric(v) !== null)
+  return hasCommodity && !hasUnit && !hasNumeric
+}
+
+// ─── Helper: find data start row ───────────────────────────────────────────────
+const findDataStartRow = (raw) => {
+  for (let i = 0; i < Math.min(30, raw.length); i++) {
+    const row = raw[i]
+    if (!row || row.length < 3) continue
+    const cell0 = String(row[0] ?? "").toLowerCase()
+    if (cell0.includes("commodity") || cell0.includes("item") || cell0.includes("description")) {
+      return i + 1
+    }
+  }
+  return 8
+}
+
 // ─── Prevailing Price Formula ─────────────────────────────────────────────────
 const calcPrevailing = (values) => {
   const nums = values.map((v) => parseFloat(v)).filter((v) => !isNaN(v))
@@ -46,58 +80,66 @@ const parseDAExcel = (workbook) => {
   let marketName = null
   let priceDate = null
 
-  for (let i = 0; i < Math.min(10, raw.length); i++) {
-    const cell0 = String(raw[i][0] ?? "")
-    if (/MARKET:/i.test(cell0)) {
-      marketName = cell0.replace(/MARKET:/i, "").trim()
+  for (let i = 0; i < Math.min(20, raw.length); i++) {
+    const row = raw[i]
+    if (!row) continue
+    
+    const cell0 = String(row[0] ?? "")
+    const cell1 = String(row[1] ?? "")
+    
+    if (/MARKET:/i.test(cell0) || /MARKET\s*NAME/i.test(cell0)) {
+      const rawVal = cell0.replace(/.*MARKET\s*:\s*/i, "").trim() || cell1.trim()
+      marketName = rawVal.replace(/\s*market\s*$/i, "").trim()
     }
-    if (/Date\s*:/i.test(cell0)) {
-      const datePart = cell0.replace(/Date\s*:/i, "").trim()
-      const parsed = new Date(datePart)
-      priceDate = !isNaN(parsed)
-        ? parsed.toISOString().split("T")[0]
-        : datePart
+    if (/Date/i.test(cell0) || /Date/i.test(cell1)) {
+      const datePart = cell0.replace(/.*Date\s*:\s*/i, "").trim() || cell1.replace(/Date\s*:\s*/i, "").trim()
+      if (datePart) {
+        const parsed = new Date(datePart)
+        priceDate = !isNaN(parsed) ? parsed.toISOString().split("T")[0] : datePart
+      }
     }
   }
+
+  // ── Find actual data start ────────────────────────────────────────────────
+  const dataStartRow = findDataStartRow(raw)
 
   // ── Parse commodity rows ──────────────────────────────────────────────────
   let currentCategory = null
   const results = []
 
-  for (let i = 8; i < raw.length; i++) {
+  for (let i = dataStartRow; i < raw.length; i++) {
     const row = raw[i]
-    if (!row || row.every((c) => c === null)) continue
+    if (!row || !Array.isArray(row)) continue
+    
+    // Only process rows with 13 columns
+    if (row.length < 13) continue
+
+    // Skip completely empty rows
+    if (row.every((c) => c === null || c === undefined || String(c).trim() === "")) continue
 
     const commodityRaw = row[0]
-    const specification = row[1]
-    const unit = row[2]
-    const rawRespondents = [row[3], row[4], row[5], row[6], row[7]]
-
-    if (commodityRaw === null) continue
+    if (commodityRaw === null || commodityRaw === undefined) continue
+    
     const commodityName = String(commodityRaw).trim()
     if (!commodityName) continue
 
-    const respondents = rawRespondents.map((v) => {
-      if (v === null || String(v).toLowerCase() === "n/a") return null
-      const f = parseFloat(v)
-      return isNaN(f) ? null : f
-    })
+    const specification = row[1]
+    const unit = row[2]
+    const rawRespondents = [row[3], row[4], row[5], row[6], row[7]].map(v => v ?? null)
 
+    const respondents = rawRespondents.map((v) => parseNumeric(v))
     const numericOnly = respondents.filter((v) => v !== null)
 
-    // Category header: no unit AND no numeric respondents
-    if (unit === null && numericOnly.length === 0) {
+    // Category header detection
+    if (isCategoryRow(row)) {
       currentCategory = commodityName.replace(/\s+/g, " ").trim()
       continue
     }
 
-    if (numericOnly.length === 0) continue
-
-    const prevailing = calcPrevailing(numericOnly)
-    if (prevailing === null) continue
-
-    const high = Math.max(...numericOnly)
-    const low = Math.min(...numericOnly)
+    // Calculate prevailing only if there are numeric values
+    const prevailing = numericOnly.length > 0 ? calcPrevailing(numericOnly) : null
+    const high = numericOnly.length > 0 ? Math.max(...numericOnly) : null
+    const low = numericOnly.length > 0 ? Math.min(...numericOnly) : null
 
     results.push({
       category: currentCategory,
@@ -144,6 +186,7 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitProgress, setSubmitProgress] = useState({ current: 0, total: 0 })
   const [step, setStep] = useState("upload")
+  const [existingPrices, setExistingPrices] = useState([])
 
   useEffect(() => {
     if (isOpen) {
@@ -152,6 +195,7 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
       fetchCategories()
     }
   }, [isOpen])
+
 
   // ── Lookup helpers ────────────────────────────────────────────────────────
 
@@ -181,6 +225,7 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
   const findCategory = (name) =>
     categories.find((c) => c.name?.trim().toLowerCase() === name?.trim().toLowerCase()) ?? null
 
+
   // ── Annotate rows ─────────────────────────────────────────────────────────
   const annotateRows = (parsed) =>
     parsed.map((row, index) => {
@@ -200,6 +245,10 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
       const errors = []
       if (!row.price_date) errors.push("Missing price date")
 
+      const duplicate = commodity?.id && market?.id && row.price_date
+        ? isDuplicate(commodity.id, market.id, row.price_date)
+        : false
+
       return {
         ...row,
         commodity_id: commodity?.id ?? null,
@@ -208,6 +257,7 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
         _index: index + 1,
         _willCreate: willCreate,
         _errors: errors,
+        _duplicate: duplicate,
       }
     })
 
@@ -246,10 +296,10 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
 
   // ── Submit with auto-create chain ─────────────────────────────────────────
   const handleSubmit = async () => {
-    const processableRows = rows.filter((r) => r._errors.length === 0)
+    const processableRows = rows.filter((r) => r._errors.length === 0 && !r._duplicate)
 
     if (processableRows.length === 0) {
-      Swal.fire({ icon: "warning", title: "No Valid Rows", text: "All rows have errors." })
+      Swal.fire({ icon: "warning", title: "No Valid Rows", text: "All rows have errors or are duplicates." })
       return
     }
 
@@ -376,6 +426,8 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
   const errorRows = rows.filter((r) => r._errors.length > 0)
   const validRows = rows.filter((r) => r._errors.length === 0)
   const newEntryRows = validRows.filter((r) => r._willCreate.length > 0)
+  const duplicateRows = validRows.filter((r) => r._duplicate === true)
+  const processableRows = validRows.filter((r) => !r._duplicate)
 
   const groupedRows = rows.reduce((acc, row) => {
     const cat = row.category || "Uncategorized"
@@ -463,6 +515,9 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
               {errorRows.length > 0 && (
                 <span className="badge badge-error">✕ {errorRows.length} error{errorRows.length > 1 ? "s" : ""}</span>
               )}
+              {duplicateRows.length > 0 && (
+                <span className="badge badge-info">♻️ {duplicateRows.length} duplicate{duplicateRows.length > 1 ? "s" : ""}</span>
+              )}
               <span className="text-xs text-gray-400 ml-auto">{fileName}</span>
               <button
                 className="btn btn-xs btn-ghost"
@@ -473,12 +528,16 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
             </div>
 
             {/* Auto-create notice */}
-            {newEntryRows.length > 0 && (
-              <div className="alert alert-warning py-2 text-sm">
+            {(newEntryRows.length > 0 || duplicateRows.length > 0) && (
+              <div className="alert py-2 text-sm">
                 <span>⚠️</span>
                 <span>
-                  <strong>{newEntryRows.length}</strong> row(s) have missing categories, commodities, or markets —
-                  they will be <strong>auto-created</strong> during import.
+                  {newEntryRows.length > 0 && (
+                    <><strong>{newEntryRows.length}</strong> row(s) have missing categories, commodities, or markets — they will be <strong>auto-created</strong> during import.</>
+                  )}
+                  {duplicateRows.length > 0 && (
+                    <span className="ml-2"><strong>{duplicateRows.length}</strong> row(s) are <strong>duplicates</strong> and will be skipped.</span>
+                  )}
                 </span>
               </div>
             )}
@@ -533,6 +592,10 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
                               <div className="tooltip tooltip-left" data-tip={row._errors.join(" | ")}>
                                 <span className="badge badge-error badge-sm cursor-help">✕ error</span>
                               </div>
+                            ) : row._duplicate ? (
+                              <div className="tooltip tooltip-left" data-tip="Record already exists for this date">
+                                <span className="badge badge-info badge-sm cursor-help">♻️ duplicate</span>
+                              </div>
                             ) : row._willCreate.length > 0 ? (
                               <div className="tooltip tooltip-left" data-tip={`Will create: ${row._willCreate.join(", ")}`}>
                                 <span className="badge badge-warning badge-sm cursor-help">✦ auto-create</span>
@@ -575,12 +638,12 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
             <button
               className="btn btn-success"
               onClick={handleSubmit}
-              disabled={isSubmitting || validRows.length === 0}
+              disabled={isSubmitting || processableRows.length === 0}
             >
               {isSubmitting ? (
                 <><span className="loading loading-spinner loading-sm" /> Importing...</>
               ) : (
-                `Import ${validRows.length} Record${validRows.length !== 1 ? "s" : ""}`
+                `Import ${processableRows.length} Record${processableRows.length !== 1 ? "s" : ""}`
               )}
             </button>
           )}
