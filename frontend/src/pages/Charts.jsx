@@ -2,11 +2,11 @@ import React, { useEffect, useState } from "react"
 import {
   LineChart, Line,
   BarChart, Bar,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell
 } from "recharts"
 import { useVegetableStore } from "../store/VegetableStore.js"
+import { useAnalyticsStore } from "../store/AnalyticsStore.js"
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const fmt = (v) => v != null ? `₱${Number(v).toFixed(2)}` : "—"
@@ -68,23 +68,24 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 // ── main component ─────────────────────────────────────────────────────────────
 const Charts = () => {
+  // ── stores — hooks must be called inside the component ───────────────────
+  const { vegetables, markets, categories, fetchVegetables, fetchMarkets, fetchCategories } =
+    useVegetableStore()
+
   const {
-    vegetables, markets, categories,
-    fetchVegetables, fetchMarkets, fetchCategories,
-    analytics, analyticsLoading,
+    analytics, analyticsLoading: al,
     fetchDashboardStats,
     fetchPriceTrend,
     fetchAvgByMarket,
     fetchPriceComparison,
-    fetchPriceVolatility,
-    fetchMarketCoverage,
-  } = useVegetableStore()
+    // fetchPriceVolatility,
+    // fetchMarketCoverage,
+  } = useAnalyticsStore()
 
-  const { stats, trend, avgByMarket, comparison, volatility, coverage } = analytics
-  const al = analyticsLoading
+  const { stats, trend, avgByMarket, comparison } = analytics
 
   // ── local filter / control state ──────────────────────────────────────────
-  const [search, setSearch]               = useState("")
+  const [search, setSearch]                 = useState("")
   const [categoryFilter, setCategoryFilter] = useState("")
   const [trendCommodity, setTrendCommodity] = useState("")
   const [trendMarket, setTrendMarket]       = useState("")
@@ -96,7 +97,7 @@ const Charts = () => {
     fetchMarkets()
     fetchCategories()
     fetchDashboardStats()
-    fetchMarketCoverage()
+    // fetchMarketCoverage()
   }, [])
 
   // auto-select first commodity
@@ -117,7 +118,7 @@ const Charts = () => {
   useEffect(() => {
     const cat = categories.find((c) => c.name === categoryFilter)
     fetchPriceComparison({ market_id: compMarket || undefined, category_id: cat?.id })
-    fetchPriceVolatility({ market_id: compMarket || undefined, category_id: cat?.id })
+    // fetchPriceVolatility({ market_id: compMarket || undefined, category_id: cat?.id })
   }, [compMarket, categoryFilter, categories])
 
   // ── derived ───────────────────────────────────────────────────────────────
@@ -345,52 +346,6 @@ const Charts = () => {
                 <Bar dataKey="prevailing_price" name="Prevailing" fill="#22c55e" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="low_price"        name="Low"        fill="#f59e0b" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
-          </ChartShell>
-        </section>
-
-        {/* ── VOLATILITY + MARKET COVERAGE ──────────────────────────────── */}
-        <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-
-          <ChartShell
-            title="Most Volatile Commodities (Top 10)"
-            loading={al.volatility}
-            empty={volatility.length === 0}
-            emptyIcon="📉"
-            emptyText="No volatility data"
-            height={220}
-          >
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={volatility} layout="vertical" margin={{ top: 0, right: 20, bottom: 0, left: 80 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis type="number" tickFormatter={(v) => `₱${v}`} tick={{ fontSize: 10 }} />
-                <YAxis type="category" dataKey="commodity_name" tick={{ fontSize: 10 }} width={80} />
-                <Tooltip formatter={(v, n) => [fmt(v), n]} />
-                <Bar dataKey="price_stddev" name="Std Dev" radius={[0, 6, 6, 0]}>
-                  {volatility.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartShell>
-
-          <ChartShell
-            title="Market Coverage"
-            loading={al.coverage}
-            empty={coverage.length === 0}
-            emptyIcon="🗺️"
-            emptyText="No market data"
-            height={220}
-          >
-            <ResponsiveContainer width="100%" height={220}>
-              <RadarChart data={coverage.slice(0, 8)}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="market_name" tick={{ fontSize: 10 }} />
-                <PolarRadiusAxis tick={{ fontSize: 9 }} />
-                <Radar name="Commodities" dataKey="commodity_count" stroke="#22c55e" fill="#22c55e" fillOpacity={0.3} />
-                <Radar name="Records"     dataKey="total_records"   stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Tooltip />
-              </RadarChart>
             </ResponsiveContainer>
           </ChartShell>
         </section>

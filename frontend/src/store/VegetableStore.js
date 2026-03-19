@@ -26,14 +26,16 @@ export const useVegetableStore = create((set, get) => ({
 
       response.data.data.forEach((item) => {
         if (!grouped[item.commodity_id]) {
-          grouped[item.commodity_id] = {
-            id: item.commodity_id,
-            name: item.name,
-            specification: item.specification,
-            categories: item.category,
-            price_date: item.price_date,
-            markets: {}
-          }
+         grouped[item.commodity_id] = {
+          id: item.commodity_id,
+          name: item.name,
+          specification: item.specification,
+          categories: item.category,
+          price_date: item.price_date,
+          price_count: item.price_count,           // ✅ add this
+          respondent_count: item.respondent_count, // ✅ add this
+          markets: {}
+        }
         }
 
         grouped[item.commodity_id].markets[item.market_name] = {

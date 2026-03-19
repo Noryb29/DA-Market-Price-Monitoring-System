@@ -52,42 +52,6 @@ const App = () => {
       {/* ── LEFT SIDEBAR ── */}
       <div className="w-64 bg-base-100 shadow-lg p-6 flex flex-col gap-4 text-base-content">
 
-        {/* Actions */}
-        <div className="collapse collapse-arrow bg-base-200 rounded-box">
-          <input type="checkbox" />
-          <div className="collapse-title font-semibold">Actions</div>
-          <div className="collapse-content flex flex-col gap-3">
-            <button
-              onClick={() => setIsAddOpen(true)}
-              className="btn btn-success w-full"
-            >
-              Add Price Record
-            </button>
-            <button
-              onClick={() => setIsAddCommodityOpen(true)}
-              className="btn btn-success w-full"
-            >
-              Add New Commodity
-            </button>
-
-            <button
-              onClick={() => setExcelUploadOpen(true)}
-              className="btn btn-success w-full"
-            >
-              Bulk Upload Excel
-            </button>
-
-            <button
-              onClick={() => setPDFUploadOpen(true)}
-              className="btn btn-success w-full"
-            >
-              Upload PDF
-            </button>
-
-
-          </div>
-        </div>
-
         {/* Filter Options */}
         <div className="collapse collapse-arrow bg-base-200 rounded-box">
           <input type="checkbox" defaultChecked />
@@ -140,6 +104,53 @@ const App = () => {
 
           </div>
         </div>
+
+        {/* Actions */}
+        <div className="collapse collapse-arrow bg-base-200 rounded-box">
+          <input type="checkbox" />
+          <div className="collapse-title font-semibold">Actions</div>
+          <div className="collapse-content flex flex-col gap-3">
+            <button
+              onClick={() => setIsAddOpen(true)}
+              className="btn btn-success w-full"
+            >
+              Add Price Record
+            </button>
+            <button
+              onClick={() => setIsAddCommodityOpen(true)}
+              className="btn btn-success w-full"
+            >
+              Add New Commodity
+            </button>
+
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+        <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Actions</span>
+
+        <button
+          onClick={() => setExcelUploadOpen(true)}
+          className="flex items-center gap-3 w-full rounded-xl border border-base-300 bg-base-100 hover:bg-green-50 hover:border-green-300 transition-colors p-4 text-left shadow-sm"
+        >
+          <span className="text-2xl">📊</span>
+          <div>
+            <p className="font-semibold text-sm text-gray-700">Bulk Upload Excel</p>
+            <p className="text-xs text-gray-400">Import from Form A1 spreadsheet</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setPDFUploadOpen(true)}
+          className="flex items-center gap-3 w-full rounded-xl border border-base-300 bg-base-100 hover:bg-green-50 hover:border-green-300 transition-colors p-4 text-left shadow-sm"
+        >
+          <span className="text-2xl">📄</span>
+          <div>
+            <p className="font-semibold text-sm text-gray-700">Upload PDF</p>
+            <p className="text-xs text-gray-400">Import from Bantay Presyo report</p>
+          </div>
+        </button>
+      </div>
       </div>
 
       {/* ── MAIN CONTENT ── */}
