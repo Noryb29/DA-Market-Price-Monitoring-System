@@ -112,81 +112,70 @@ export const useVegetableStore = create((set, get) => ({
   // ADD COMMODITY
   // =====================
   addCommodity: async (formData) => {
-    if (!formData.category_id || !formData.name) {
-      Swal.fire({
-        icon: "warning",
-        title: "Missing Fields",
-        text: "Category and Commodity Name are required."
-      })
-      return { success: false }
-    }
+  if (!formData.category_id || !formData.name) {
+    return { success: false, message: "Category and name are required" }
+  }
 
-    try {
-      const response = await axios.post(
-        `${BASE_URL}/api/vegetables/commodities`,
-        formData
-      )
-
-      if (response.data.success) {
-        Swal.fire({
-          icon: "success",
-          title: "Commodity Added",
-          text: "New commodity successfully added.",
-          timer: 1500,
-          showConfirmButton: false
-        })
-        get().fetchCommodities()
-        return response.data
-      }
-    } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Failed to add commodity."
-      })
-      return { success: false, message: "Failed to add commodity" }
-    }
-  },
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/api/vegetables/commodities`,
+      formData
+    )
+    return response.data  // { success: true, id: ... }
+  } catch (err) {
+    console.error("addCommodity error:", err)
+    return { success: false, message: "Failed to add commodity" }
+  }
+},
 
   // =====================
   // ADD PRICE RECORD
   // =====================
   addPriceRecord: async (formData) => {
-    if (!formData.commodity_id || !formData.market_id || !formData.price_date || !formData.prevailing_price) {
-      Swal.fire({
-        icon: "warning",
-        title: "Missing Fields",
-        text: "Please fill all required fields."
-      })
-      return { success: false }
-    }
+  if (!formData.commodity_id || !formData.market_id || !formData.price_date) {
+    return { success: false, message: "Missing required fields" }
+  }
 
-    try {
-      const response = await axios.post(
-        `${BASE_URL}/api/vegetables/prices`,
-        formData
-      )
-
-      if (response.data.success) {
-        Swal.fire({
-          icon: "success",
-          title: "Price Added",
-          text: "Price record successfully saved.",
-          timer: 1500,
-          showConfirmButton: false
-        })
-        get().fetchVegetables()
-        return response.data
-      }
-    } catch (err) {
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "Failed to add price record."
-      })
-      return { success: false }
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/api/vegetables/prices`,
+      formData
+    )
+    return response.data  // { success: true, id: ... }
+  } catch (err) {
+    // 409 = duplicate record — treat as non-fatal, return the response body
+    if (err.response?.status === 409) {
+      return err.response.data  // { success: false, duplicate: true }
     }
-  },
+    return { success: false, message: "Failed to add price record" }
+  }
+},
+
+addCategory: async (name) => {
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/api/vegetables/categories`,
+      { name }
+    )
+    return response.data  // { success: true, id: ... }
+  } catch (err) {
+    console.error("addCategory error:", err)
+    return { success: false, message: "Failed to add category" }
+  }
+},
+
+addMarket: async (name) => {
+  try {
+    const response = await axios.post(
+      `${BASE_URL}/api/vegetables/markets`,
+      { name }
+    )
+    return response.data  // { success: true, id: ... }
+  } catch (err) {
+    console.error("addMarket error:", err)
+    return { success: false, message: "Failed to add market" }
+  }
+},
 
   // =====================
   // IMPORT EXCEL FORM RECORDS

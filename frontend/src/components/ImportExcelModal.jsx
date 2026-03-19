@@ -245,9 +245,6 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
       const errors = []
       if (!row.price_date) errors.push("Missing price date")
 
-      const duplicate = commodity?.id && market?.id && row.price_date
-        ? isDuplicate(commodity.id, market.id, row.price_date)
-        : false
 
       return {
         ...row,
@@ -257,7 +254,6 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
         _index: index + 1,
         _willCreate: willCreate,
         _errors: errors,
-        _duplicate: duplicate,
       }
     })
 
@@ -296,7 +292,7 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
 
   // ── Submit with auto-create chain ─────────────────────────────────────────
   const handleSubmit = async () => {
-    const processableRows = rows.filter((r) => r._errors.length === 0 && !r._duplicate)
+    const processableRows = rows.filter((r) => r._errors.length === 0 )
 
     if (processableRows.length === 0) {
       Swal.fire({ icon: "warning", title: "No Valid Rows", text: "All rows have errors or are duplicates." })
@@ -313,7 +309,6 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
 
     let successCount = 0
     let failCount = 0
-    let duplicateCount = 0
     let createdCount = 0
 
     for (let i = 0; i < processableRows.length; i++) {
@@ -379,7 +374,6 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
         })
 
         if (result?.success) successCount++
-        else if (result?.duplicate) duplicateCount++
         else failCount++
 
       } catch (err) {
@@ -399,7 +393,6 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
       html: `
         <p><strong>${successCount}</strong> price record(s) inserted.</p>
         ${createdCount > 0 ? `<p><strong>${createdCount}</strong> new entry/entries auto-created.</p>` : ""}
-        ${duplicateCount > 0 ? `<p><strong>${duplicateCount}</strong> row(s) skipped — record already exists for that date.</p>` : ""}
         ${failCount > 0 ? `<p><strong>${failCount}</strong> row(s) failed.</p>` : ""}
         ${skipped > 0 ? `<p><strong>${skipped}</strong> row(s) skipped due to validation errors.</p>` : ""}
       `,
@@ -425,9 +418,8 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
 
   const errorRows = rows.filter((r) => r._errors.length > 0)
   const validRows = rows.filter((r) => r._errors.length === 0)
+  const processableRows = validRows  // same filter as inside handleSubmit
   const newEntryRows = validRows.filter((r) => r._willCreate.length > 0)
-  const duplicateRows = validRows.filter((r) => r._duplicate === true)
-  const processableRows = validRows.filter((r) => !r._duplicate)
 
   const groupedRows = rows.reduce((acc, row) => {
     const cat = row.category || "Uncategorized"
@@ -515,9 +507,6 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
               {errorRows.length > 0 && (
                 <span className="badge badge-error">✕ {errorRows.length} error{errorRows.length > 1 ? "s" : ""}</span>
               )}
-              {duplicateRows.length > 0 && (
-                <span className="badge badge-info">♻️ {duplicateRows.length} duplicate{duplicateRows.length > 1 ? "s" : ""}</span>
-              )}
               <span className="text-xs text-gray-400 ml-auto">{fileName}</span>
               <button
                 className="btn btn-xs btn-ghost"
@@ -528,15 +517,12 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
             </div>
 
             {/* Auto-create notice */}
-            {(newEntryRows.length > 0 || duplicateRows.length > 0) && (
+            {(newEntryRows.length > 0) && (
               <div className="alert py-2 text-sm">
                 <span>⚠️</span>
                 <span>
                   {newEntryRows.length > 0 && (
                     <><strong>{newEntryRows.length}</strong> row(s) have missing categories, commodities, or markets — they will be <strong>auto-created</strong> during import.</>
-                  )}
-                  {duplicateRows.length > 0 && (
-                    <span className="ml-2"><strong>{duplicateRows.length}</strong> row(s) are <strong>duplicates</strong> and will be skipped.</span>
                   )}
                 </span>
               </div>
@@ -591,10 +577,6 @@ const ImportExcelModal = ({ isOpen, OnClose }) => {
                             {row._errors.length > 0 ? (
                               <div className="tooltip tooltip-left" data-tip={row._errors.join(" | ")}>
                                 <span className="badge badge-error badge-sm cursor-help">✕ error</span>
-                              </div>
-                            ) : row._duplicate ? (
-                              <div className="tooltip tooltip-left" data-tip="Record already exists for this date">
-                                <span className="badge badge-info badge-sm cursor-help">♻️ duplicate</span>
                               </div>
                             ) : row._willCreate.length > 0 ? (
                               <div className="tooltip tooltip-left" data-tip={`Will create: ${row._willCreate.join(", ")}`}>
